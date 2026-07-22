@@ -25,8 +25,9 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## O que tem
 
 - Cubo com bordas arredondadas + transmission física
+- Parede tipográfica streetwear animada (texto refrata no cristal)
 - Cáusticas espectrais internas animadas
-- Estúdio óptico limpo + environment map de referência
+- Pós-processamento **somente no cubo** (fundo fica limpo via máscara)
 - Pipeline de pós-processamento reutilizável:
   - Dual Kawase bloom
   - Glare anamórfico

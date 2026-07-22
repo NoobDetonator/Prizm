@@ -5,10 +5,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { SavePass } from 'three/addons/postprocessing/SavePass.js'
 import { createPrismTexture } from './textures/createPrismTexture.js'
 import { createPrismEnvironment } from './env/createPrismEnvironment.js'
 import { loadImageEnvironment } from './env/loadImageEnvironment.js'
-import { createOpticalStudio } from './backdrop/createOpticalStudioClean.js'
+import { createStreetwearBackdrop } from './backdrop/createStreetwearBackdrop.js'
 import { CinematicPrismShader } from './post/CinematicPrismShader.js'
 import { QualityBloomPass } from './post/QualityBloomPass.js'
 import { GlarePass } from './post/GlarePass.js'
@@ -17,6 +18,8 @@ import { AsciiPass } from './post/AsciiPass.js'
 import { DepthOfFieldPass } from './post/DepthOfFieldPass.js'
 import { HalftoneStylePass } from './post/HalftoneStylePass.js'
 import { AfterimageStylePass } from './post/AfterimageStylePass.js'
+import { SelectiveCubeCompositePass } from './post/SelectiveCubeCompositePass.js'
+import { createCubeMaskRenderer } from './post/createCubeMaskRenderer.js'
 import { LOOK_PRESETS, applyLookPreset } from './post/lookPresets.js'
 import { createInternalCaustics } from './effects/createInternalCaustics.js'
 import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
@@ -76,7 +79,8 @@ const ui = {
   ),
 }
 
-document.querySelector('.tag').textContent = 'optical looks / realtime post stack'
+document.querySelector('.tag').textContent = 'streetwear refraction / cube-only post FX'
+document.querySelector('.hint').textContent = 'arraste para orbitar · scroll para zoom · FX só no cubo · texto refrata atrás'
 
 const panelToggle = document.createElement('button')
 panelToggle.type = 'button'
@@ -166,8 +170,8 @@ prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
 scene.add(prism)
 
-const studio = createOpticalStudio()
-scene.add(studio)
+const streetwear = createStreetwearBackdrop()
+scene.add(streetwear)
 
 const keyLight = new THREE.DirectionalLight('#fff5ec', 2.3)
 keyLight.position.set(4.5, 6, 3.5)
@@ -197,7 +201,15 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
-// Pipeline: render → DoF → bloom → glare → flare → afterimage → cinematic → halftone → ASCII → output
+// Freeze a clean beauty copy BEFORE stylization so the backdrop stays untouched.
+const cleanSavePass = new SavePass()
+composer.addPass(cleanSavePass)
+
+const cubeMask = createCubeMaskRenderer()
+cubeMask.setSize(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio())
+
+// Pipeline: beauty → save clean → DoF → bloom → glare → flare → afterimage → cinematic →
+// halftone → ASCII → selective mix (cube only) → output
 const dofPass = new DepthOfFieldPass(scene, camera, {
   focus: 4.8,
   aperture: 0.00022,
@@ -226,6 +238,10 @@ composer.addPass(halftonePass)
 
 const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true })
 composer.addPass(asciiPass)
+
+const selectivePass = new SelectiveCubeCompositePass(cleanSavePass.renderTarget.texture, cubeMask.texture)
+selectivePass.setSelective(true)
+composer.addPass(selectivePass)
 
 composer.addPass(new OutputPass())
 composer.setSize(window.innerWidth, window.innerHeight)
@@ -262,6 +278,9 @@ async function boot() {
     interiorRimMaterial,
     rimMaterial,
     caustics,
+    streetwear,
+    cubeMask,
+    selectivePass,
     bloomPass,
     glarePass,
     flarePass,
@@ -498,6 +517,9 @@ function onResize() {
   renderer.setSize(width, height)
   composer.setPixelRatio(dpr)
   composer.setSize(width, height)
+  cubeMask.setSize(width * dpr, height * dpr)
+  selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+  selectivePass.setMaskTexture(cubeMask.texture)
   dofPass.syncCamera(camera)
 }
 
@@ -521,7 +543,13 @@ function animate(now) {
   // Slow anamorphic rotation for living glare
   glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
   caustics.userData.update(now * 0.001)
+  streetwear.userData.update(now * 0.001)
   controls.update()
+
+  // Mask first so selective composite can keep the streetwear wall clean.
+  cubeMask.renderMask(renderer, scene, camera, [streetwear])
+  selectivePass.setMaskTexture(cubeMask.texture)
+  selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   composer.render()
 }
 
@@ -544,6 +572,10 @@ async function exportRender(scale = 2) {
     renderer.setSize(width, height, false)
     composer.setPixelRatio(1)
     composer.setSize(width, height)
+    cubeMask.setSize(width, height)
+    cubeMask.renderMask(renderer, scene, camera, [streetwear])
+    selectivePass.setMaskTexture(cubeMask.texture)
+    selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
     composer.render()
 
     const blob = await new Promise((resolve, reject) => {
