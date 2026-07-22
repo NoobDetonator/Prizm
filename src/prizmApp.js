@@ -241,7 +241,7 @@ selectivePass.setSelective(true)
 composer.addPass(selectivePass)
 
 // ASCII after selective mix: whole glyphs only on cube cells, streetwear stays clean.
-const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true, solid: true })
+const asciiPass = new AsciiPass({ amount: 0, cellSize: 10 })
 asciiPass.setMaskTexture(cubeMask.texture)
 composer.addPass(asciiPass)
 
@@ -379,7 +379,7 @@ function applyUi() {
 
   asciiPass.setAmount(values.ascii)
   asciiPass.setCellSize(values.asciiCell)
-  asciiPass.setContrast(1.15 + values.ascii * 0.55)
+  asciiPass.setContrast(1.05 + values.ascii * 0.45)
   asciiPass.setMaskTexture(cubeMask.texture)
   asciiPass.enabled = values.ascii > 0.01
 

@@ -10,32 +10,25 @@ import {
 import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js'
 
 /**
- * Real-time ASCII pass — reusable on any EffectComposer stack.
- * Optional coverage mask: only cells whose center hits the mask become glyphs,
- * so a cube can be fully ASCII while the backdrop stays clean (no clipped chars).
+ * Grayscale ASCII pass — the object reads only through white/gray glyphs on black.
+ * Optional coverage mask: cells on the mask fully replace the underlying geometry.
  */
 export class AsciiPass extends Pass {
   /**
    * @param {object} [options]
-   * @param {number} [options.amount=0] 0 = off, 1 = full ASCII
+   * @param {number} [options.amount=0] 0 = off, 1 = full opaque ASCII (hides geometry)
    * @param {number} [options.cellSize=10] pixel cell size
-   * @param {boolean} [options.colorize=true] tint glyphs with scene color
-   * @param {boolean} [options.solid=true] paint dark cell bg so the form reads as a block
    * @param {string} [options.charset] denser = brighter
    */
   constructor({
     amount = 0,
     cellSize = 10,
-    colorize = true,
-    solid = true,
     charset = ' .\'`^",:;Il!i~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
   } = {}) {
     super()
 
     this.amount = amount
     this.cellSize = cellSize
-    this.colorize = colorize
-    this.solid = solid
     this.enabled = true
 
     this._atlas = createGlyphAtlas(charset)
@@ -48,11 +41,9 @@ export class AsciiPass extends Pass {
         cellSize: { value: cellSize },
         glyphCount: { value: this._atlas.count },
         amount: { value: amount },
-        colorize: { value: colorize ? 1 : 0 },
-        solid: { value: solid ? 1 : 0 },
         useMask: { value: 0 },
-        contrast: { value: 1.35 },
-        maskThreshold: { value: 0.28 },
+        contrast: { value: 1.25 },
+        maskThreshold: { value: 0.22 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -72,16 +63,6 @@ export class AsciiPass extends Pass {
   setCellSize(value) {
     this.cellSize = value
     this._material.uniforms.cellSize.value = value
-  }
-
-  setColorize(enabled) {
-    this.colorize = enabled
-    this._material.uniforms.colorize.value = enabled ? 1 : 0
-  }
-
-  setSolid(enabled) {
-    this.solid = enabled
-    this._material.uniforms.solid.value = enabled ? 1 : 0
   }
 
   setContrast(value) {
@@ -139,7 +120,7 @@ function createGlyphAtlas(charset) {
   ctx.fillStyle = '#fff'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = `bold ${Math.floor(cell * 0.82)}px "Courier New", ui-monospace, monospace`
+  ctx.font = `bold ${Math.floor(cell * 0.84)}px "Courier New", ui-monospace, monospace`
 
   for (let i = 0; i < chars.length; i++) {
     ctx.fillText(chars[i], (i + 0.5) * cell, cell * 0.55)
@@ -172,8 +153,6 @@ const FRAG = /* glsl */ `
   uniform float cellSize;
   uniform float glyphCount;
   uniform float amount;
-  uniform float colorize;
-  uniform float solid;
   uniform float useMask;
   uniform float contrast;
   uniform float maskThreshold;
@@ -185,14 +164,25 @@ const FRAG = /* glsl */ `
 
   float cellMask(vec2 cellUv) {
     if (useMask < 0.5) return 1.0;
-    // Sample a small neighborhood so thin glass edges still light up a cell
     vec2 texel = 1.0 / resolution;
+    float span = cellSize * 0.28;
     float m = texture2D(tMask, cellUv).r;
-    m = max(m, texture2D(tMask, cellUv + vec2( texel.x * cellSize * 0.25, 0.0)).r);
-    m = max(m, texture2D(tMask, cellUv - vec2( texel.x * cellSize * 0.25, 0.0)).r);
-    m = max(m, texture2D(tMask, cellUv + vec2(0.0,  texel.y * cellSize * 0.25)).r);
-    m = max(m, texture2D(tMask, cellUv - vec2(0.0,  texel.y * cellSize * 0.25)).r);
+    m = max(m, texture2D(tMask, cellUv + vec2( texel.x * span, 0.0)).r);
+    m = max(m, texture2D(tMask, cellUv - vec2( texel.x * span, 0.0)).r);
+    m = max(m, texture2D(tMask, cellUv + vec2(0.0,  texel.y * span)).r);
+    m = max(m, texture2D(tMask, cellUv - vec2(0.0,  texel.y * span)).r);
     return step(maskThreshold, m);
+  }
+
+  float cellLuma(vec2 cellUv, float cell) {
+    // Average a few taps so form lighting reads through the glyph choice
+    vec2 texel = (cell * 0.22) / resolution;
+    float b = luma(texture2D(tDiffuse, cellUv).rgb);
+    b += luma(texture2D(tDiffuse, cellUv + vec2(texel.x, 0.0)).rgb);
+    b += luma(texture2D(tDiffuse, cellUv - vec2(texel.x, 0.0)).rgb);
+    b += luma(texture2D(tDiffuse, cellUv + vec2(0.0, texel.y)).rgb);
+    b += luma(texture2D(tDiffuse, cellUv - vec2(0.0, texel.y)).rgb);
+    return b * 0.2;
   }
 
   void main() {
@@ -214,11 +204,10 @@ const FRAG = /* glsl */ `
       return;
     }
 
-    vec3 sampleColor = texture2D(tDiffuse, cellUv).rgb;
-    float brightness = clamp(luma(sampleColor), 0.0, 1.0);
-    // Punch contrast so glass highlights become dense glyphs
+    float brightness = clamp(cellLuma(cellUv, cell), 0.0, 1.0);
     brightness = clamp(pow(brightness, 1.0 / max(contrast, 0.2)), 0.0, 1.0);
 
+    // Dense glyph = brighter region; gray level of the ink also tracks brightness
     float glyphIndex = floor(brightness * (glyphCount - 1.0) + 0.5);
     vec2 local = fract(pixel / cell);
     local.y = 1.0 - local.y;
@@ -226,17 +215,23 @@ const FRAG = /* glsl */ `
     float atlasU = (glyphIndex + local.x) / glyphCount;
     float glyph = texture2D(tAtlas, vec2(atlasU, local.y)).r;
 
-    vec3 ink = colorize > 0.5
-      ? sampleColor * (0.25 + glyph * 1.55)
-      : vec3(glyph);
+    // Pure black paper — underlying glass/geometry never shows through
+    vec3 paper = vec3(0.0);
+    // White → mid gray ink: highlights pop, shadows stay dim
+    float inkTone = mix(0.22, 1.0, brightness);
+    vec3 ink = vec3(inkTone);
+    vec3 asciiColor = mix(paper, ink, glyph);
 
-    vec3 paper = solid > 0.5 ? sampleColor * 0.08 : src;
-    vec3 asciiColor = mix(paper, ink, max(glyph, 0.04));
+    // Soft cell edge so the block still reads as a lattice, not mush
+    float grid = smoothstep(0.012, 0.06, min(min(local.x, local.y), min(1.0 - local.x, 1.0 - local.y)));
+    asciiColor *= 0.9 + grid * 0.1;
 
-    float grid = smoothstep(0.015, 0.07, min(min(local.x, local.y), min(1.0 - local.x, 1.0 - local.y)));
-    asciiColor *= 0.88 + grid * 0.14;
+    // amount fades ASCII in; at 1 the geometry is fully replaced
+    float cover = clamp(amount, 0.0, 1.0);
+    // Even mid values strongly hide the mesh so form is glyph-driven
+    cover = smoothstep(0.0, 0.35, cover) * mix(0.85, 1.0, cover);
 
-    vec3 color = mix(src, asciiColor, amount);
+    vec3 color = mix(src, asciiColor, cover);
     gl_FragColor = vec4(color, 1.0);
   }
 `
