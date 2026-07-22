@@ -18,12 +18,28 @@
 
       <header class="hud">
         <p class="brand">Prizm</p>
-        <p class="tag">optical physics · streetwear refraction</p>
+        <p class="tag">streetwear refraction · cube-only post FX</p>
       </header>
 
-      <aside class="panel">
+      <aside class="panel" id="controls-panel">
+        <p class="panel-section">Look</p>
         <label class="preset-field">
-          <span class="row">Material</span>
+          <span class="row">Artistic preset</span>
+          <select id="look">
+            <option value="studio" selected>Studio clean</option>
+            <option value="anamorphic">Anamorphic cinema</option>
+            <option value="portrait">Soft portrait</option>
+            <option value="neonAscii">Neon ASCII</option>
+            <option value="ghostTrail">Ghost trail</option>
+            <option value="printShop">Print shop</option>
+            <option value="prismChaos">Prism chaos</option>
+          </select>
+          <small id="look-note">baseline optical study</small>
+        </label>
+
+        <p class="panel-section">Material</p>
+        <label class="preset-field">
+          <span class="row">Glass</span>
           <select id="preset">
             <option value="glass">Crown glass · n≈1.52</option>
             <option value="flint">Flint glass · n≈1.62</option>
@@ -53,17 +69,91 @@
           <input id="translucency" type="range" min="0" max="1" step="0.01" value="0.12" />
         </label>
         <label>
-          <span class="row">Bloom <em data-value="bloom">0.16</em></span>
-          <input id="bloom" type="range" min="0" max="1" step="0.01" value="0.16" />
-        </label>
-        <label>
           <span class="row">Speckle <em data-value="speckle">0.45</em></span>
           <input id="speckle" type="range" min="0" max="1" step="0.01" value="0.45" />
         </label>
-        <button id="download-texture" type="button">Baixar textura</button>
+        <label>
+          <span class="row">Caustics <em data-value="caustics">0.45</em></span>
+          <input id="caustics" type="range" min="0" max="1" step="0.01" value="0.45" />
+        </label>
+
+        <p class="panel-section">Post FX</p>
+        <label>
+          <span class="row">Bloom <em data-value="bloom">0.34</em></span>
+          <input id="bloom" type="range" min="0" max="1.5" step="0.01" value="0.34" />
+        </label>
+        <label>
+          <span class="row">Glare <em data-value="glare">0.35</em></span>
+          <input id="glare" type="range" min="0" max="1.5" step="0.01" value="0.35" />
+        </label>
+        <label>
+          <span class="row">Lens flare <em data-value="flare">0.25</em></span>
+          <input id="flare" type="range" min="0" max="1.5" step="0.01" value="0.25" />
+        </label>
+        <label>
+          <span class="row">Depth of field <em data-value="dof">0.00</em></span>
+          <input id="dof" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label>
+          <span class="row">DoF focus <em data-value="dof-focus">4.80</em></span>
+          <input id="dof-focus" type="range" min="1.5" max="10" step="0.05" value="4.8" />
+        </label>
+        <label>
+          <span class="row">Afterimage <em data-value="afterimage">0.00</em></span>
+          <input id="afterimage" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label>
+          <span class="row">Halftone <em data-value="halftone">0.00</em></span>
+          <input id="halftone" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label>
+          <span class="row">ASCII cube <em data-value="ascii">0.00</em></span>
+          <input id="ascii" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label>
+          <span class="row">ASCII cell <em data-value="ascii-cell">8</em></span>
+          <input id="ascii-cell" type="range" min="4" max="28" step="1" value="8" />
+        </label>
+        <label>
+          <span class="row">Chroma <em data-value="chroma">0.70</em></span>
+          <input id="chroma" type="range" min="0" max="1.5" step="0.01" value="0.70" />
+        </label>
+        <label>
+          <span class="row">Vignette <em data-value="vignette">0.26</em></span>
+          <input id="vignette" type="range" min="0" max="1" step="0.01" value="0.26" />
+        </label>
+        <label>
+          <span class="row">Grain <em data-value="grain">0.35</em></span>
+          <input id="grain" type="range" min="0" max="1" step="0.01" value="0.35" />
+        </label>
+
+        <p class="panel-section">Render</p>
+        <label>
+          <span class="row">Exposure <em data-value="exposure">1.08</em></span>
+          <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.08" />
+        </label>
+        <label>
+          <span class="row">Pixel ratio <em data-value="dpr">2.00</em></span>
+          <input id="dpr" type="range" min="1" max="2" step="0.05" value="2" />
+        </label>
+        <label>
+          <span class="row">Transmission <em data-value="transmission-scale">1.00</em></span>
+          <input id="transmission-scale" type="range" min="0.25" max="1" step="0.05" value="1" />
+        </label>
+        <label class="preset-field">
+          <span class="row">Tone map</span>
+          <select id="tonemap">
+            <option value="aces" selected>ACES Filmic</option>
+            <option value="reinhard">Reinhard</option>
+            <option value="cineon">Cineon</option>
+            <option value="none">None (linear)</option>
+          </select>
+        </label>
+
+        <button id="download-texture" type="button">Exportar render 2×</button>
       </aside>
 
-      <footer class="hint">arraste para orbitar · scroll para zoom · texto refrata atrás do prisma</footer>
+      <footer class="hint">arraste para orbitar · scroll para zoom · FX só no cubo · texto refrata atrás</footer>
     </div>
     <script type="module" src="/src/prizmApp.js"></script>
   </body>

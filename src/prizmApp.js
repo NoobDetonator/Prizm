@@ -5,12 +5,23 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { SavePass } from 'three/addons/postprocessing/SavePass.js'
 import { createPrismTexture } from './textures/createPrismTexture.js'
 import { createPrismEnvironment } from './env/createPrismEnvironment.js'
 import { loadImageEnvironment } from './env/loadImageEnvironment.js'
-import { createOpticalStudio } from './backdrop/createOpticalStudioClean.js'
+import { createStreetwearBackdrop } from './backdrop/createStreetwearBackdrop.js'
 import { CinematicPrismShader } from './post/CinematicPrismShader.js'
 import { QualityBloomPass } from './post/QualityBloomPass.js'
+import { GlarePass } from './post/GlarePass.js'
+import { LensFlarePass } from './post/LensFlarePass.js'
+import { AsciiPass } from './post/AsciiPass.js'
+import { DepthOfFieldPass } from './post/DepthOfFieldPass.js'
+import { HalftoneStylePass } from './post/HalftoneStylePass.js'
+import { AfterimageStylePass } from './post/AfterimageStylePass.js'
+import { SelectiveCubeCompositePass } from './post/SelectiveCubeCompositePass.js'
+import { createCubeMaskRenderer } from './post/createCubeMaskRenderer.js'
+import { LOOK_PRESETS, applyLookPreset } from './post/lookPresets.js'
+import { createInternalCaustics } from './effects/createInternalCaustics.js'
 import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
 import { applyGlassInteriorRimParams, createGlassInteriorRimMaterial } from './materials/glassInteriorRimMaterial.js'
 import {
@@ -21,6 +32,13 @@ import {
   createPhysicalGlassMaterial,
 } from './materials/physicalGlassV2.js'
 
+const TONE_MAP = {
+  aces: THREE.ACESFilmicToneMapping,
+  reinhard: THREE.ReinhardToneMapping,
+  cineon: THREE.CineonToneMapping,
+  none: THREE.NoToneMapping,
+}
+
 const canvas = document.querySelector('#canvas')
 canvas.setAttribute('role', 'img')
 canvas.setAttribute('aria-label', 'Prisma de cristal artístico interativo em um estúdio óptico')
@@ -28,6 +46,8 @@ canvas.tabIndex = 0
 
 const ui = {
   panel: document.querySelector('.panel'),
+  look: document.querySelector('#look'),
+  lookNote: document.querySelector('#look-note'),
   preset: document.querySelector('#preset'),
   dispersion: document.querySelector('#dispersion'),
   thickness: document.querySelector('#thickness'),
@@ -35,26 +55,32 @@ const ui = {
   roughness: document.querySelector('#roughness'),
   translucency: document.querySelector('#translucency'),
   bloom: document.querySelector('#bloom'),
+  glare: document.querySelector('#glare'),
+  flare: document.querySelector('#flare'),
+  dof: document.querySelector('#dof'),
+  dofFocus: document.querySelector('#dof-focus'),
+  afterimage: document.querySelector('#afterimage'),
+  halftone: document.querySelector('#halftone'),
+  ascii: document.querySelector('#ascii'),
+  asciiCell: document.querySelector('#ascii-cell'),
+  chroma: document.querySelector('#chroma'),
+  vignette: document.querySelector('#vignette'),
+  grain: document.querySelector('#grain'),
+  exposure: document.querySelector('#exposure'),
+  dpr: document.querySelector('#dpr'),
+  transmissionScale: document.querySelector('#transmission-scale'),
+  tonemap: document.querySelector('#tonemap'),
   speckle: document.querySelector('#speckle'),
+  caustics: document.querySelector('#caustics'),
   export: document.querySelector('#download-texture'),
   note: document.querySelector('#preset-note'),
-  values: {
-    dispersion: document.querySelector('[data-value="dispersion"]'),
-    thickness: document.querySelector('[data-value="thickness"]'),
-    ior: document.querySelector('[data-value="ior"]'),
-    roughness: document.querySelector('[data-value="roughness"]'),
-    translucency: document.querySelector('[data-value="translucency"]'),
-    bloom: document.querySelector('[data-value="bloom"]'),
-    speckle: document.querySelector('[data-value="speckle"]'),
-  },
+  values: Object.fromEntries(
+    [...document.querySelectorAll('[data-value]')].map((el) => [el.getAttribute('data-value'), el]),
+  ),
 }
 
-ui.panel.id = 'controls-panel'
-ui.roughness.step = '0.001'
-ui.bloom.max = '1.5'
-document.querySelector('.tag').textContent = 'optical material study / realtime render'
-document.querySelector('.hint').textContent = 'arraste para orbitar / scroll para zoom / duplo clique para resetar'
-ui.export.textContent = 'Exportar render 2×'
+document.querySelector('.tag').textContent = 'streetwear refraction / cube-only post FX'
+document.querySelector('.hint').textContent = 'arraste para orbitar · scroll para zoom · FX só no cubo · texto refrata atrás'
 
 const panelToggle = document.createElement('button')
 panelToggle.type = 'button'
@@ -64,7 +90,7 @@ panelToggle.setAttribute('aria-controls', ui.panel.id)
 panelToggle.setAttribute('aria-expanded', 'false')
 document.querySelector('#app').append(panelToggle)
 
-const MAX_DPR = 2
+let maxDprCap = Number(ui.dpr.value) || 2
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -73,7 +99,7 @@ const renderer = new THREE.WebGLRenderer({
   preserveDrawingBuffer: true,
   powerPreference: 'high-performance',
 })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR))
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDprCap))
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setClearColor('#000000', 1)
 renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -134,15 +160,18 @@ const rim = new THREE.Mesh(geometry, rimMaterial)
 rim.scale.setScalar(1.012)
 rim.renderOrder = 4
 
+const surfaceDetails = createSurfaceDetails(prismDimensions, 420, 90)
+const caustics = createInternalCaustics()
+
 const prism = new THREE.Group()
 prism.name = 'hero-prism'
-prism.add(cubeBack, interiorRim, cubeFront, rim)
+prism.add(cubeBack, caustics, interiorRim, cubeFront, surfaceDetails, rim)
 prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
 scene.add(prism)
 
-const studio = createOpticalStudio()
-scene.add(studio)
+const streetwear = createStreetwearBackdrop()
+scene.add(streetwear)
 
 const keyLight = new THREE.DirectionalLight('#fff5ec', 2.3)
 keyLight.position.set(4.5, 6, 3.5)
@@ -172,14 +201,51 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
+// Freeze a clean beauty copy BEFORE stylization so the backdrop stays untouched.
+const cleanSavePass = new SavePass()
+composer.addPass(cleanSavePass)
+
+const cubeMask = createCubeMaskRenderer()
+cubeMask.setSize(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio())
+
+// Pipeline: beauty → save clean → DoF → bloom → glare → flare → afterimage → cinematic →
+// halftone → ASCII → selective mix (cube only) → output
+const dofPass = new DepthOfFieldPass(scene, camera, {
+  focus: 4.8,
+  aperture: 0.00022,
+  maxblur: 0.01,
+})
+dofPass.enabled = false
+composer.addPass(dofPass)
+
 const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
 composer.addPass(bloomPass)
 
+const glarePass = new GlarePass({ strength: 0.35, threshold: 0.7, stretch: 1.55, angle: 0.08 })
+composer.addPass(glarePass)
+
+const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
+composer.addPass(flarePass)
+
+const afterimagePass = new AfterimageStylePass(0)
+composer.addPass(afterimagePass)
+
 const cinematicPass = new ShaderPass(CinematicPrismShader)
 composer.addPass(cinematicPass)
-composer.addPass(new OutputPass())
 
-// Sync all pass targets (incl. bloom pyramid) to current viewport × DPR
+const halftonePass = new HalftoneStylePass({ amount: 0, radius: 3.4, shape: 1 })
+composer.addPass(halftonePass)
+
+const selectivePass = new SelectiveCubeCompositePass(cleanSavePass.renderTarget.texture, cubeMask.texture)
+selectivePass.setSelective(true)
+composer.addPass(selectivePass)
+
+// ASCII after selective mix: whole glyphs only on cube cells, streetwear stays clean.
+const asciiPass = new AsciiPass({ amount: 0, cellSize: 10 })
+asciiPass.setMaskTexture(cubeMask.texture)
+composer.addPass(asciiPass)
+
+composer.addPass(new OutputPass())
 composer.setSize(window.innerWidth, window.innerHeight)
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -192,10 +258,10 @@ boot()
 async function boot() {
   if (document.fonts?.ready) await document.fonts.ready
 
-  ui.translucency.value = '0.08'
-  ui.bloom.value = '0.34'
-  ui.speckle.value = '0.28'
-  syncPresetToSliders(presetKey)
+  applyLookPreset(ui, ui.look.value || 'studio')
+  if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
+    ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+  }
   applyUi()
   bindUi()
   window.addEventListener('resize', onResize)
@@ -213,7 +279,19 @@ async function boot() {
     backMaterial,
     interiorRimMaterial,
     rimMaterial,
+    caustics,
+    streetwear,
+    cubeMask,
+    selectivePass,
     bloomPass,
+    glarePass,
+    flarePass,
+    dofPass,
+    afterimagePass,
+    halftonePass,
+    asciiPass,
+    cinematicPass,
+    LOOK_PRESETS,
     exportRender,
     applyUi,
     readUi,
@@ -240,7 +318,23 @@ function readUi() {
     roughness: Number(ui.roughness.value),
     translucency: Number(ui.translucency.value),
     bloom: Number(ui.bloom.value),
+    glare: Number(ui.glare.value),
+    flare: Number(ui.flare.value),
+    dof: Number(ui.dof.value),
+    dofFocus: Number(ui.dofFocus.value),
+    afterimage: Number(ui.afterimage.value),
+    halftone: Number(ui.halftone.value),
+    ascii: Number(ui.ascii.value),
+    asciiCell: Number(ui.asciiCell.value),
+    chroma: Number(ui.chroma.value),
+    vignette: Number(ui.vignette.value),
+    grain: Number(ui.grain.value),
+    exposure: Number(ui.exposure.value),
+    dpr: Number(ui.dpr.value),
+    transmissionScale: Number(ui.transmissionScale.value),
+    tonemap: ui.tonemap.value,
     speckle: Number(ui.speckle.value),
+    caustics: Number(ui.caustics.value),
   }
 }
 
@@ -261,11 +355,48 @@ function applyUi() {
   applyPhysicalParams(material, { ...values, presetKey })
   applyBackFaceParams(backMaterial, material, values.translucency)
   applyGlassInteriorRimParams(interiorRimMaterial, values)
+  surfaceDetails.userData.setIntensity(values.speckle)
+  caustics.userData.setIntensity(values.caustics)
 
   bloomPass.setStrength(values.bloom * 1.15)
-  bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, values.bloom / 1.5))
-  bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, values.bloom / 1.5))
+  bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, Math.min(values.bloom, 1.5) / 1.5))
+  bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, Math.min(values.bloom, 1.5) / 1.5))
   rimMaterial.uniforms.intensity.value = 0.36 + values.bloom * 0.4 + values.dispersion * 0.065
+
+  glarePass.setStrength(values.glare)
+  glarePass.enabled = values.glare > 0.01
+  glarePass.setStretch(0.9 + values.glare * 1.1)
+
+  flarePass.setStrength(values.flare)
+  flarePass.enabled = values.flare > 0.01
+
+  dofPass.setFocus(values.dofFocus)
+  dofPass.setStrength(values.dof)
+
+  afterimagePass.setAmount(values.afterimage)
+  halftonePass.setAmount(values.halftone)
+  halftonePass.setRadius(2.4 + values.halftone * 2.8)
+
+  asciiPass.setAmount(values.ascii)
+  asciiPass.setCellSize(values.asciiCell)
+  asciiPass.setContrast(1.05 + values.ascii * 0.45)
+  asciiPass.setMaskTexture(cubeMask.texture)
+  asciiPass.enabled = values.ascii > 0.01
+
+  cinematicPass.uniforms.intensity.value = values.chroma
+  cinematicPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
+  cinematicPass.uniforms.vignette.value = values.vignette
+  cinematicPass.uniforms.grain.value = values.grain * 0.014
+
+  renderer.toneMappingExposure = values.exposure
+  renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
+  renderer.transmissionResolutionScale = values.transmissionScale
+
+  const nextDprCap = THREE.MathUtils.clamp(values.dpr, 1, 2)
+  if (Math.abs(nextDprCap - maxDprCap) > 0.001) {
+    maxDprCap = nextDprCap
+    onResize()
+  }
 
   setValueLabel('dispersion', values.dispersion.toFixed(2))
   setValueLabel('thickness', values.thickness.toFixed(2))
@@ -273,7 +404,22 @@ function applyUi() {
   setValueLabel('roughness', values.roughness.toFixed(3))
   setValueLabel('translucency', values.translucency.toFixed(2))
   setValueLabel('bloom', values.bloom.toFixed(2))
+  setValueLabel('glare', values.glare.toFixed(2))
+  setValueLabel('flare', values.flare.toFixed(2))
+  setValueLabel('dof', values.dof.toFixed(2))
+  setValueLabel('dof-focus', values.dofFocus.toFixed(2))
+  setValueLabel('afterimage', values.afterimage.toFixed(2))
+  setValueLabel('halftone', values.halftone.toFixed(2))
+  setValueLabel('ascii', values.ascii.toFixed(2))
+  setValueLabel('ascii-cell', String(Math.round(values.asciiCell)))
+  setValueLabel('chroma', values.chroma.toFixed(2))
+  setValueLabel('vignette', values.vignette.toFixed(2))
+  setValueLabel('grain', values.grain.toFixed(2))
+  setValueLabel('exposure', values.exposure.toFixed(2))
+  setValueLabel('dpr', values.dpr.toFixed(2))
+  setValueLabel('transmission-scale', values.transmissionScale.toFixed(2))
   setValueLabel('speckle', values.speckle.toFixed(2))
+  setValueLabel('caustics', values.caustics.toFixed(2))
 }
 
 function setValueLabel(key, value) {
@@ -297,15 +443,43 @@ function bindUi() {
     applyUi()
   })
 
-  for (const element of [
+  ui.look.addEventListener('change', (event) => {
+    stop(event)
+    applyLookPreset(ui, ui.look.value)
+    if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
+      ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+    }
+    applyUi()
+  })
+
+  ui.tonemap.addEventListener('change', update)
+
+  const sliders = [
     ui.dispersion,
     ui.thickness,
     ui.ior,
     ui.roughness,
     ui.translucency,
     ui.bloom,
+    ui.glare,
+    ui.flare,
+    ui.dof,
+    ui.dofFocus,
+    ui.afterimage,
+    ui.halftone,
+    ui.ascii,
+    ui.asciiCell,
+    ui.chroma,
+    ui.vignette,
+    ui.grain,
+    ui.exposure,
+    ui.dpr,
+    ui.transmissionScale,
     ui.speckle,
-  ]) {
+    ui.caustics,
+  ]
+
+  for (const element of sliders) {
     element.addEventListener('pointerdown', stop)
     element.addEventListener('input', update)
     element.addEventListener('change', update)
@@ -339,7 +513,7 @@ function bindUi() {
 function onResize() {
   const width = window.innerWidth
   const height = window.innerHeight
-  const dpr = Math.min(window.devicePixelRatio, MAX_DPR)
+  const dpr = Math.min(window.devicePixelRatio, maxDprCap)
 
   camera.aspect = width / height
   camera.updateProjectionMatrix()
@@ -347,6 +521,12 @@ function onResize() {
   renderer.setSize(width, height)
   composer.setPixelRatio(dpr)
   composer.setSize(width, height)
+  cubeMask.setSize(width * dpr, height * dpr)
+  selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+  selectivePass.setMaskTexture(cubeMask.texture)
+  asciiPass.setMaskTexture(cubeMask.texture)
+  asciiPass.setSize(width * dpr, height * dpr)
+  dofPass.syncCamera(camera)
 }
 
 function onVisibilityChange() {
@@ -366,7 +546,17 @@ function animate(now) {
   if (autoSpin) prism.rotation.y += delta * 0.035
 
   cinematicPass.uniforms.time.value = now * 0.001
+  // Slow anamorphic rotation for living glare
+  glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
+  caustics.userData.update(now * 0.001)
+  streetwear.userData.update(now * 0.001)
   controls.update()
+
+  // Mask first so selective composite can keep the streetwear wall clean.
+  cubeMask.renderMask(renderer, scene, camera, [streetwear])
+  selectivePass.setMaskTexture(cubeMask.texture)
+  selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+  asciiPass.setMaskTexture(cubeMask.texture)
   composer.render()
 }
 
@@ -389,6 +579,12 @@ async function exportRender(scale = 2) {
     renderer.setSize(width, height, false)
     composer.setPixelRatio(1)
     composer.setSize(width, height)
+    cubeMask.setSize(width, height)
+    cubeMask.renderMask(renderer, scene, camera, [streetwear])
+    selectivePass.setMaskTexture(cubeMask.texture)
+    selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+    asciiPass.setMaskTexture(cubeMask.texture)
+    asciiPass.setSize(width, height)
     composer.render()
 
     const blob = await new Promise((resolve, reject) => {

@@ -25,7 +25,19 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## O que tem
 
 - Cubo com bordas arredondadas + transmission física
-- Parede tipográfica streetwear atrás do prisma (texto passa e distorce)
-- Environment map de faixas espectrais
-- Bloom leve + aberração cromática
+- Parede tipográfica streetwear animada (texto refrata no cristal)
+- Cáusticas espectrais internas animadas
+- Pós-processamento **somente no cubo** (fundo fica limpo via máscara)
+- Pipeline de pós-processamento reutilizável:
+  - Dual Kawase bloom
+  - Glare anamórfico
+  - Lens flare (ghosts)
+  - Depth of field (Bokeh)
+  - Afterimage / ghost trails
+  - Halftone CMYK
+  - ASCII grayscale no cubo (branco/cinza · geometria escondida · forma só pelos glifos)
+  - Aberração cromática / vinheta / grain
+- Presets artísticos (studio, anamorphic, portrait, neon ASCII, ghost trail, print shop, prism chaos)
+- Controles de render: exposure, DPR, transmission scale, tone map
+- Export de render 2×
 - Painel com presets e sliders ao vivo

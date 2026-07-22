@@ -15,16 +15,27 @@ export function createStreetwearBackdrop() {
       size: [16, 11],
       position: [0, 0, -2.85],
       opacity: 1,
-      speed: 0.14,
+      speedY: 0.045,
+      speedX: 0.012,
       scale: 1,
     },
     {
       lines: ['OPTICAL CHAOS', 'BEND REALITY', 'CRYSTAL CORE', 'VOID / GLASS'],
       size: [18, 9],
       position: [0.35, 0.15, -3.55],
-      opacity: 0.55,
-      speed: -0.08,
+      opacity: 0.62,
+      speedY: -0.028,
+      speedX: -0.018,
       scale: 1.08,
+    },
+    {
+      lines: ['RAW OPTICS', 'LIGHT ENTERS', 'COLOR LEAVES', 'NO CAP'],
+      size: [20, 10],
+      position: [-0.2, -0.1, -4.05],
+      opacity: 0.28,
+      speedY: 0.02,
+      speedX: 0.03,
+      scale: 1.15,
     },
   ]
 
@@ -32,19 +43,22 @@ export function createStreetwearBackdrop() {
 
   for (const layer of layers) {
     const { texture, canvas } = paintStreetwearTexture(layer.lines, 2048, 1280)
+    texture.wrapS = THREE.RepeatWrapping
+    texture.wrapT = THREE.RepeatWrapping
     const geo = new THREE.PlaneGeometry(layer.size[0], layer.size[1])
-    // Keep backdrop mostly opaque so the transmission pass can refract it cleanly
     const mat = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: layer.opacity < 0.99,
       opacity: layer.opacity,
       depthWrite: layer.opacity >= 0.99,
       side: THREE.FrontSide,
+      toneMapped: false,
     })
     const mesh = new THREE.Mesh(geo, mat)
     mesh.position.set(...layer.position)
     mesh.scale.setScalar(layer.scale)
-    mesh.userData.scrollSpeed = layer.speed
+    mesh.userData.speedY = layer.speedY
+    mesh.userData.speedX = layer.speedX
     mesh.userData.canvas = canvas
     mesh.userData.texture = texture
     mesh.userData.lines = layer.lines
@@ -54,24 +68,24 @@ export function createStreetwearBackdrop() {
 
   // Soft luminous slab so the glass has something bright to bend
   const wash = new THREE.Mesh(
-    new THREE.PlaneGeometry(18, 12),
+    new THREE.PlaneGeometry(22, 14),
     new THREE.MeshBasicMaterial({
-      color: '#0a1018',
+      color: '#05070c',
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.92,
       depthWrite: false,
+      toneMapped: false,
     }),
   )
-  wash.position.z = -4.2
+  wash.position.z = -4.55
   group.add(wash)
 
   group.userData.update = (time) => {
     for (const mesh of meshes) {
-      const offset = (time * mesh.userData.scrollSpeed) % 1
-      // Rebuild scroll by shifting UV — cheap marquee
-      mesh.material.map.offset.y = offset
-      mesh.material.map.wrapT = THREE.RepeatWrapping
-      mesh.material.map.wrapS = THREE.RepeatWrapping
+      const map = mesh.material.map
+      if (!map) continue
+      map.offset.y = (time * mesh.userData.speedY) % 1
+      map.offset.x = (time * mesh.userData.speedX) % 1
     }
   }
 
