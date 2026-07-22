@@ -25,14 +25,18 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## O que tem
 
 - Cubo com bordas arredondadas + transmission física
+- Cáusticas espectrais internas animadas
 - Estúdio óptico limpo + environment map de referência
 - Pipeline de pós-processamento reutilizável:
   - Dual Kawase bloom
   - Glare anamórfico
   - Lens flare (ghosts)
   - Depth of field (Bokeh)
+  - Afterimage / ghost trails
+  - Halftone CMYK
   - ASCII em tempo real
   - Aberração cromática / vinheta / grain
+- Presets artísticos (studio, anamorphic, portrait, neon ASCII, ghost trail, print shop, prism chaos)
 - Controles de render: exposure, DPR, transmission scale, tone map
 - Export de render 2×
 - Painel com presets e sliders ao vivo

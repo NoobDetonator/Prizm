@@ -22,9 +22,24 @@
       </header>
 
       <aside class="panel" id="controls-panel">
+        <p class="panel-section">Look</p>
+        <label class="preset-field">
+          <span class="row">Artistic preset</span>
+          <select id="look">
+            <option value="studio" selected>Studio clean</option>
+            <option value="anamorphic">Anamorphic cinema</option>
+            <option value="portrait">Soft portrait</option>
+            <option value="neonAscii">Neon ASCII</option>
+            <option value="ghostTrail">Ghost trail</option>
+            <option value="printShop">Print shop</option>
+            <option value="prismChaos">Prism chaos</option>
+          </select>
+          <small id="look-note">baseline optical study</small>
+        </label>
+
         <p class="panel-section">Material</p>
         <label class="preset-field">
-          <span class="row">Preset</span>
+          <span class="row">Glass</span>
           <select id="preset">
             <option value="glass">Crown glass · n≈1.52</option>
             <option value="flint">Flint glass · n≈1.62</option>
@@ -57,6 +72,10 @@
           <span class="row">Speckle <em data-value="speckle">0.45</em></span>
           <input id="speckle" type="range" min="0" max="1" step="0.01" value="0.45" />
         </label>
+        <label>
+          <span class="row">Caustics <em data-value="caustics">0.45</em></span>
+          <input id="caustics" type="range" min="0" max="1" step="0.01" value="0.45" />
+        </label>
 
         <p class="panel-section">Post FX</p>
         <label>
@@ -78,6 +97,14 @@
         <label>
           <span class="row">DoF focus <em data-value="dof-focus">4.80</em></span>
           <input id="dof-focus" type="range" min="1.5" max="10" step="0.05" value="4.8" />
+        </label>
+        <label>
+          <span class="row">Afterimage <em data-value="afterimage">0.00</em></span>
+          <input id="afterimage" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+        <label>
+          <span class="row">Halftone <em data-value="halftone">0.00</em></span>
+          <input id="halftone" type="range" min="0" max="1" step="0.01" value="0" />
         </label>
         <label>
           <span class="row">ASCII <em data-value="ascii">0.00</em></span>

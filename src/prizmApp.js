@@ -15,6 +15,10 @@ import { GlarePass } from './post/GlarePass.js'
 import { LensFlarePass } from './post/LensFlarePass.js'
 import { AsciiPass } from './post/AsciiPass.js'
 import { DepthOfFieldPass } from './post/DepthOfFieldPass.js'
+import { HalftoneStylePass } from './post/HalftoneStylePass.js'
+import { AfterimageStylePass } from './post/AfterimageStylePass.js'
+import { LOOK_PRESETS, applyLookPreset } from './post/lookPresets.js'
+import { createInternalCaustics } from './effects/createInternalCaustics.js'
 import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
 import { applyGlassInteriorRimParams, createGlassInteriorRimMaterial } from './materials/glassInteriorRimMaterial.js'
 import {
@@ -39,6 +43,8 @@ canvas.tabIndex = 0
 
 const ui = {
   panel: document.querySelector('.panel'),
+  look: document.querySelector('#look'),
+  lookNote: document.querySelector('#look-note'),
   preset: document.querySelector('#preset'),
   dispersion: document.querySelector('#dispersion'),
   thickness: document.querySelector('#thickness'),
@@ -50,6 +56,8 @@ const ui = {
   flare: document.querySelector('#flare'),
   dof: document.querySelector('#dof'),
   dofFocus: document.querySelector('#dof-focus'),
+  afterimage: document.querySelector('#afterimage'),
+  halftone: document.querySelector('#halftone'),
   ascii: document.querySelector('#ascii'),
   asciiCell: document.querySelector('#ascii-cell'),
   chroma: document.querySelector('#chroma'),
@@ -60,6 +68,7 @@ const ui = {
   transmissionScale: document.querySelector('#transmission-scale'),
   tonemap: document.querySelector('#tonemap'),
   speckle: document.querySelector('#speckle'),
+  caustics: document.querySelector('#caustics'),
   export: document.querySelector('#download-texture'),
   note: document.querySelector('#preset-note'),
   values: Object.fromEntries(
@@ -67,7 +76,7 @@ const ui = {
   ),
 }
 
-document.querySelector('.tag').textContent = 'optical material study / realtime render'
+document.querySelector('.tag').textContent = 'optical looks / realtime post stack'
 
 const panelToggle = document.createElement('button')
 panelToggle.type = 'button'
@@ -148,10 +157,11 @@ rim.scale.setScalar(1.012)
 rim.renderOrder = 4
 
 const surfaceDetails = createSurfaceDetails(prismDimensions, 420, 90)
+const caustics = createInternalCaustics()
 
 const prism = new THREE.Group()
 prism.name = 'hero-prism'
-prism.add(cubeBack, interiorRim, cubeFront, surfaceDetails, rim)
+prism.add(cubeBack, caustics, interiorRim, cubeFront, surfaceDetails, rim)
 prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
 scene.add(prism)
@@ -187,7 +197,7 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
-// Pipeline: render → DoF → bloom → glare → flare → cinematic → ASCII → output
+// Pipeline: render → DoF → bloom → glare → flare → afterimage → cinematic → halftone → ASCII → output
 const dofPass = new DepthOfFieldPass(scene, camera, {
   focus: 4.8,
   aperture: 0.00022,
@@ -205,8 +215,14 @@ composer.addPass(glarePass)
 const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
 composer.addPass(flarePass)
 
+const afterimagePass = new AfterimageStylePass(0)
+composer.addPass(afterimagePass)
+
 const cinematicPass = new ShaderPass(CinematicPrismShader)
 composer.addPass(cinematicPass)
+
+const halftonePass = new HalftoneStylePass({ amount: 0, radius: 3.4, shape: 1 })
+composer.addPass(halftonePass)
 
 const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true })
 composer.addPass(asciiPass)
@@ -224,10 +240,10 @@ boot()
 async function boot() {
   if (document.fonts?.ready) await document.fonts.ready
 
-  ui.translucency.value = '0.08'
-  ui.bloom.value = '0.34'
-  ui.speckle.value = '0.28'
-  syncPresetToSliders(presetKey)
+  applyLookPreset(ui, ui.look.value || 'studio')
+  if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
+    ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+  }
   applyUi()
   bindUi()
   window.addEventListener('resize', onResize)
@@ -245,12 +261,16 @@ async function boot() {
     backMaterial,
     interiorRimMaterial,
     rimMaterial,
+    caustics,
     bloomPass,
     glarePass,
     flarePass,
     dofPass,
+    afterimagePass,
+    halftonePass,
     asciiPass,
     cinematicPass,
+    LOOK_PRESETS,
     exportRender,
     applyUi,
     readUi,
@@ -281,6 +301,8 @@ function readUi() {
     flare: Number(ui.flare.value),
     dof: Number(ui.dof.value),
     dofFocus: Number(ui.dofFocus.value),
+    afterimage: Number(ui.afterimage.value),
+    halftone: Number(ui.halftone.value),
     ascii: Number(ui.ascii.value),
     asciiCell: Number(ui.asciiCell.value),
     chroma: Number(ui.chroma.value),
@@ -291,6 +313,7 @@ function readUi() {
     transmissionScale: Number(ui.transmissionScale.value),
     tonemap: ui.tonemap.value,
     speckle: Number(ui.speckle.value),
+    caustics: Number(ui.caustics.value),
   }
 }
 
@@ -312,6 +335,7 @@ function applyUi() {
   applyBackFaceParams(backMaterial, material, values.translucency)
   applyGlassInteriorRimParams(interiorRimMaterial, values)
   surfaceDetails.userData.setIntensity(values.speckle)
+  caustics.userData.setIntensity(values.caustics)
 
   bloomPass.setStrength(values.bloom * 1.15)
   bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, Math.min(values.bloom, 1.5) / 1.5))
@@ -327,6 +351,10 @@ function applyUi() {
 
   dofPass.setFocus(values.dofFocus)
   dofPass.setStrength(values.dof)
+
+  afterimagePass.setAmount(values.afterimage)
+  halftonePass.setAmount(values.halftone)
+  halftonePass.setRadius(2.4 + values.halftone * 2.8)
 
   asciiPass.setAmount(values.ascii)
   asciiPass.setCellSize(values.asciiCell)
@@ -357,6 +385,8 @@ function applyUi() {
   setValueLabel('flare', values.flare.toFixed(2))
   setValueLabel('dof', values.dof.toFixed(2))
   setValueLabel('dof-focus', values.dofFocus.toFixed(2))
+  setValueLabel('afterimage', values.afterimage.toFixed(2))
+  setValueLabel('halftone', values.halftone.toFixed(2))
   setValueLabel('ascii', values.ascii.toFixed(2))
   setValueLabel('ascii-cell', String(Math.round(values.asciiCell)))
   setValueLabel('chroma', values.chroma.toFixed(2))
@@ -366,6 +396,7 @@ function applyUi() {
   setValueLabel('dpr', values.dpr.toFixed(2))
   setValueLabel('transmission-scale', values.transmissionScale.toFixed(2))
   setValueLabel('speckle', values.speckle.toFixed(2))
+  setValueLabel('caustics', values.caustics.toFixed(2))
 }
 
 function setValueLabel(key, value) {
@@ -389,6 +420,15 @@ function bindUi() {
     applyUi()
   })
 
+  ui.look.addEventListener('change', (event) => {
+    stop(event)
+    applyLookPreset(ui, ui.look.value)
+    if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
+      ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+    }
+    applyUi()
+  })
+
   ui.tonemap.addEventListener('change', update)
 
   const sliders = [
@@ -402,6 +442,8 @@ function bindUi() {
     ui.flare,
     ui.dof,
     ui.dofFocus,
+    ui.afterimage,
+    ui.halftone,
     ui.ascii,
     ui.asciiCell,
     ui.chroma,
@@ -411,6 +453,7 @@ function bindUi() {
     ui.dpr,
     ui.transmissionScale,
     ui.speckle,
+    ui.caustics,
   ]
 
   for (const element of sliders) {
@@ -477,6 +520,7 @@ function animate(now) {
   cinematicPass.uniforms.time.value = now * 0.001
   // Slow anamorphic rotation for living glare
   glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
+  caustics.userData.update(now * 0.001)
   controls.update()
   composer.render()
 }
