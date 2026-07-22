@@ -11,6 +11,10 @@ import { loadImageEnvironment } from './env/loadImageEnvironment.js'
 import { createOpticalStudio } from './backdrop/createOpticalStudioClean.js'
 import { CinematicPrismShader } from './post/CinematicPrismShader.js'
 import { QualityBloomPass } from './post/QualityBloomPass.js'
+import { GlarePass } from './post/GlarePass.js'
+import { LensFlarePass } from './post/LensFlarePass.js'
+import { AsciiPass } from './post/AsciiPass.js'
+import { DepthOfFieldPass } from './post/DepthOfFieldPass.js'
 import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
 import { applyGlassInteriorRimParams, createGlassInteriorRimMaterial } from './materials/glassInteriorRimMaterial.js'
 import {
@@ -20,6 +24,13 @@ import {
   createGlassBackMaterial,
   createPhysicalGlassMaterial,
 } from './materials/physicalGlassV2.js'
+
+const TONE_MAP = {
+  aces: THREE.ACESFilmicToneMapping,
+  reinhard: THREE.ReinhardToneMapping,
+  cineon: THREE.CineonToneMapping,
+  none: THREE.NoToneMapping,
+}
 
 const canvas = document.querySelector('#canvas')
 canvas.setAttribute('role', 'img')
@@ -35,26 +46,28 @@ const ui = {
   roughness: document.querySelector('#roughness'),
   translucency: document.querySelector('#translucency'),
   bloom: document.querySelector('#bloom'),
+  glare: document.querySelector('#glare'),
+  flare: document.querySelector('#flare'),
+  dof: document.querySelector('#dof'),
+  dofFocus: document.querySelector('#dof-focus'),
+  ascii: document.querySelector('#ascii'),
+  asciiCell: document.querySelector('#ascii-cell'),
+  chroma: document.querySelector('#chroma'),
+  vignette: document.querySelector('#vignette'),
+  grain: document.querySelector('#grain'),
+  exposure: document.querySelector('#exposure'),
+  dpr: document.querySelector('#dpr'),
+  transmissionScale: document.querySelector('#transmission-scale'),
+  tonemap: document.querySelector('#tonemap'),
   speckle: document.querySelector('#speckle'),
   export: document.querySelector('#download-texture'),
   note: document.querySelector('#preset-note'),
-  values: {
-    dispersion: document.querySelector('[data-value="dispersion"]'),
-    thickness: document.querySelector('[data-value="thickness"]'),
-    ior: document.querySelector('[data-value="ior"]'),
-    roughness: document.querySelector('[data-value="roughness"]'),
-    translucency: document.querySelector('[data-value="translucency"]'),
-    bloom: document.querySelector('[data-value="bloom"]'),
-    speckle: document.querySelector('[data-value="speckle"]'),
-  },
+  values: Object.fromEntries(
+    [...document.querySelectorAll('[data-value]')].map((el) => [el.getAttribute('data-value'), el]),
+  ),
 }
 
-ui.panel.id = 'controls-panel'
-ui.roughness.step = '0.001'
-ui.bloom.max = '1.5'
 document.querySelector('.tag').textContent = 'optical material study / realtime render'
-document.querySelector('.hint').textContent = 'arraste para orbitar / scroll para zoom / duplo clique para resetar'
-ui.export.textContent = 'Exportar render 2×'
 
 const panelToggle = document.createElement('button')
 panelToggle.type = 'button'
@@ -64,7 +77,7 @@ panelToggle.setAttribute('aria-controls', ui.panel.id)
 panelToggle.setAttribute('aria-expanded', 'false')
 document.querySelector('#app').append(panelToggle)
 
-const MAX_DPR = 2
+let maxDprCap = Number(ui.dpr.value) || 2
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -73,7 +86,7 @@ const renderer = new THREE.WebGLRenderer({
   preserveDrawingBuffer: true,
   powerPreference: 'high-performance',
 })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR))
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDprCap))
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setClearColor('#000000', 1)
 renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -134,9 +147,11 @@ const rim = new THREE.Mesh(geometry, rimMaterial)
 rim.scale.setScalar(1.012)
 rim.renderOrder = 4
 
+const surfaceDetails = createSurfaceDetails(prismDimensions, 420, 90)
+
 const prism = new THREE.Group()
 prism.name = 'hero-prism'
-prism.add(cubeBack, interiorRim, cubeFront, rim)
+prism.add(cubeBack, interiorRim, cubeFront, surfaceDetails, rim)
 prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
 scene.add(prism)
@@ -172,14 +187,31 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
+// Pipeline: render → DoF → bloom → glare → flare → cinematic → ASCII → output
+const dofPass = new DepthOfFieldPass(scene, camera, {
+  focus: 4.8,
+  aperture: 0.00022,
+  maxblur: 0.01,
+})
+dofPass.enabled = false
+composer.addPass(dofPass)
+
 const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
 composer.addPass(bloomPass)
 
+const glarePass = new GlarePass({ strength: 0.35, threshold: 0.7, stretch: 1.55, angle: 0.08 })
+composer.addPass(glarePass)
+
+const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
+composer.addPass(flarePass)
+
 const cinematicPass = new ShaderPass(CinematicPrismShader)
 composer.addPass(cinematicPass)
-composer.addPass(new OutputPass())
 
-// Sync all pass targets (incl. bloom pyramid) to current viewport × DPR
+const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true })
+composer.addPass(asciiPass)
+
+composer.addPass(new OutputPass())
 composer.setSize(window.innerWidth, window.innerHeight)
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -214,6 +246,11 @@ async function boot() {
     interiorRimMaterial,
     rimMaterial,
     bloomPass,
+    glarePass,
+    flarePass,
+    dofPass,
+    asciiPass,
+    cinematicPass,
     exportRender,
     applyUi,
     readUi,
@@ -240,6 +277,19 @@ function readUi() {
     roughness: Number(ui.roughness.value),
     translucency: Number(ui.translucency.value),
     bloom: Number(ui.bloom.value),
+    glare: Number(ui.glare.value),
+    flare: Number(ui.flare.value),
+    dof: Number(ui.dof.value),
+    dofFocus: Number(ui.dofFocus.value),
+    ascii: Number(ui.ascii.value),
+    asciiCell: Number(ui.asciiCell.value),
+    chroma: Number(ui.chroma.value),
+    vignette: Number(ui.vignette.value),
+    grain: Number(ui.grain.value),
+    exposure: Number(ui.exposure.value),
+    dpr: Number(ui.dpr.value),
+    transmissionScale: Number(ui.transmissionScale.value),
+    tonemap: ui.tonemap.value,
     speckle: Number(ui.speckle.value),
   }
 }
@@ -261,11 +311,41 @@ function applyUi() {
   applyPhysicalParams(material, { ...values, presetKey })
   applyBackFaceParams(backMaterial, material, values.translucency)
   applyGlassInteriorRimParams(interiorRimMaterial, values)
+  surfaceDetails.userData.setIntensity(values.speckle)
 
   bloomPass.setStrength(values.bloom * 1.15)
-  bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, values.bloom / 1.5))
-  bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, values.bloom / 1.5))
+  bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, Math.min(values.bloom, 1.5) / 1.5))
+  bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, Math.min(values.bloom, 1.5) / 1.5))
   rimMaterial.uniforms.intensity.value = 0.36 + values.bloom * 0.4 + values.dispersion * 0.065
+
+  glarePass.setStrength(values.glare)
+  glarePass.enabled = values.glare > 0.01
+  glarePass.setStretch(0.9 + values.glare * 1.1)
+
+  flarePass.setStrength(values.flare)
+  flarePass.enabled = values.flare > 0.01
+
+  dofPass.setFocus(values.dofFocus)
+  dofPass.setStrength(values.dof)
+
+  asciiPass.setAmount(values.ascii)
+  asciiPass.setCellSize(values.asciiCell)
+  asciiPass.enabled = values.ascii > 0.01
+
+  cinematicPass.uniforms.intensity.value = values.chroma
+  cinematicPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
+  cinematicPass.uniforms.vignette.value = values.vignette
+  cinematicPass.uniforms.grain.value = values.grain * 0.014
+
+  renderer.toneMappingExposure = values.exposure
+  renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
+  renderer.transmissionResolutionScale = values.transmissionScale
+
+  const nextDprCap = THREE.MathUtils.clamp(values.dpr, 1, 2)
+  if (Math.abs(nextDprCap - maxDprCap) > 0.001) {
+    maxDprCap = nextDprCap
+    onResize()
+  }
 
   setValueLabel('dispersion', values.dispersion.toFixed(2))
   setValueLabel('thickness', values.thickness.toFixed(2))
@@ -273,6 +353,18 @@ function applyUi() {
   setValueLabel('roughness', values.roughness.toFixed(3))
   setValueLabel('translucency', values.translucency.toFixed(2))
   setValueLabel('bloom', values.bloom.toFixed(2))
+  setValueLabel('glare', values.glare.toFixed(2))
+  setValueLabel('flare', values.flare.toFixed(2))
+  setValueLabel('dof', values.dof.toFixed(2))
+  setValueLabel('dof-focus', values.dofFocus.toFixed(2))
+  setValueLabel('ascii', values.ascii.toFixed(2))
+  setValueLabel('ascii-cell', String(Math.round(values.asciiCell)))
+  setValueLabel('chroma', values.chroma.toFixed(2))
+  setValueLabel('vignette', values.vignette.toFixed(2))
+  setValueLabel('grain', values.grain.toFixed(2))
+  setValueLabel('exposure', values.exposure.toFixed(2))
+  setValueLabel('dpr', values.dpr.toFixed(2))
+  setValueLabel('transmission-scale', values.transmissionScale.toFixed(2))
   setValueLabel('speckle', values.speckle.toFixed(2))
 }
 
@@ -297,15 +389,31 @@ function bindUi() {
     applyUi()
   })
 
-  for (const element of [
+  ui.tonemap.addEventListener('change', update)
+
+  const sliders = [
     ui.dispersion,
     ui.thickness,
     ui.ior,
     ui.roughness,
     ui.translucency,
     ui.bloom,
+    ui.glare,
+    ui.flare,
+    ui.dof,
+    ui.dofFocus,
+    ui.ascii,
+    ui.asciiCell,
+    ui.chroma,
+    ui.vignette,
+    ui.grain,
+    ui.exposure,
+    ui.dpr,
+    ui.transmissionScale,
     ui.speckle,
-  ]) {
+  ]
+
+  for (const element of sliders) {
     element.addEventListener('pointerdown', stop)
     element.addEventListener('input', update)
     element.addEventListener('change', update)
@@ -339,7 +447,7 @@ function bindUi() {
 function onResize() {
   const width = window.innerWidth
   const height = window.innerHeight
-  const dpr = Math.min(window.devicePixelRatio, MAX_DPR)
+  const dpr = Math.min(window.devicePixelRatio, maxDprCap)
 
   camera.aspect = width / height
   camera.updateProjectionMatrix()
@@ -347,6 +455,7 @@ function onResize() {
   renderer.setSize(width, height)
   composer.setPixelRatio(dpr)
   composer.setSize(width, height)
+  dofPass.syncCamera(camera)
 }
 
 function onVisibilityChange() {
@@ -366,6 +475,8 @@ function animate(now) {
   if (autoSpin) prism.rotation.y += delta * 0.035
 
   cinematicPass.uniforms.time.value = now * 0.001
+  // Slow anamorphic rotation for living glare
+  glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
   controls.update()
   composer.render()
 }

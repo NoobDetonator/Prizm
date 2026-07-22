@@ -25,7 +25,14 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## O que tem
 
 - Cubo com bordas arredondadas + transmission física
-- Parede tipográfica streetwear atrás do prisma (texto passa e distorce)
-- Environment map de faixas espectrais
-- Bloom leve + aberração cromática
+- Estúdio óptico limpo + environment map de referência
+- Pipeline de pós-processamento reutilizável:
+  - Dual Kawase bloom
+  - Glare anamórfico
+  - Lens flare (ghosts)
+  - Depth of field (Bokeh)
+  - ASCII em tempo real
+  - Aberração cromática / vinheta / grain
+- Controles de render: exposure, DPR, transmission scale, tone map
+- Export de render 2×
 - Painel com presets e sliders ao vivo
