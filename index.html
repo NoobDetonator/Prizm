@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prizm — Prism Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Instrument+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles-v2.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="canvas"></canvas>
+
+      <header class="hud">
+        <p class="brand">Prizm</p>
+        <p class="tag">optical physics · streetwear refraction</p>
+      </header>
+
+      <aside class="panel">
+        <label class="preset-field">
+          <span class="row">Material</span>
+          <select id="preset">
+            <option value="glass">Crown glass · n≈1.52</option>
+            <option value="flint">Flint glass · n≈1.62</option>
+            <option value="crystal" selected>Crystal · n≈1.85</option>
+          </select>
+          <small id="preset-note">n≈1.85 · translucent crystal body</small>
+        </label>
+
+        <label>
+          <span class="row">Dispersion <em data-value="dispersion">1.35</em></span>
+          <input id="dispersion" type="range" min="0" max="2.5" step="0.01" value="1.35" />
+        </label>
+        <label>
+          <span class="row">Thickness <em data-value="thickness">1.75</em></span>
+          <input id="thickness" type="range" min="0.1" max="3" step="0.05" value="1.75" />
+        </label>
+        <label>
+          <span class="row">IOR <em data-value="ior">1.85</em></span>
+          <input id="ior" type="range" min="1.1" max="2.4" step="0.01" value="1.85" />
+        </label>
+        <label>
+          <span class="row">Roughness <em data-value="roughness">0.050</em></span>
+          <input id="roughness" type="range" min="0" max="0.35" step="0.005" value="0.05" />
+        </label>
+        <label>
+          <span class="row">Translucency <em data-value="translucency">0.12</em></span>
+          <input id="translucency" type="range" min="0" max="1" step="0.01" value="0.12" />
+        </label>
+        <label>
+          <span class="row">Bloom <em data-value="bloom">0.16</em></span>
+          <input id="bloom" type="range" min="0" max="1" step="0.01" value="0.16" />
+        </label>
+        <label>
+          <span class="row">Speckle <em data-value="speckle">0.45</em></span>
+          <input id="speckle" type="range" min="0" max="1" step="0.01" value="0.45" />
+        </label>
+        <button id="download-texture" type="button">Baixar textura</button>
+      </aside>
+
+      <footer class="hint">arraste para orbitar · scroll para zoom · texto refrata atrás do prisma</footer>
+    </div>
+    <script type="module" src="/src/prizmApp.js"></script>
+  </body>
+</html>
