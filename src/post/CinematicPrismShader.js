@@ -5,7 +5,7 @@ export const CinematicPrismShader = {
     amount: { value: 0.00135 },
     intensity: { value: 0.7 },
     vignette: { value: 0.26 },
-    grain: { value: 0.01 },
+    grain: { value: 0.004 },
     time: { value: 0 },
   },
   vertexShader: /* glsl */ `

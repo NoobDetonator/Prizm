@@ -5,12 +5,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { createPrismTexture } from './textures/createPrismTexture.js'
 import { createPrismEnvironment } from './env/createPrismEnvironment.js'
 import { loadImageEnvironment } from './env/loadImageEnvironment.js'
 import { createOpticalStudio } from './backdrop/createOpticalStudioClean.js'
 import { CinematicPrismShader } from './post/CinematicPrismShader.js'
+import { QualityBloomPass } from './post/QualityBloomPass.js'
 import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
 import { applyGlassInteriorRimParams, createGlassInteriorRimMaterial } from './materials/glassInteriorRimMaterial.js'
 import {
@@ -172,17 +172,15 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
-const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.42,
-  0.58,
-  0.82,
-)
+const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
 composer.addPass(bloomPass)
 
 const cinematicPass = new ShaderPass(CinematicPrismShader)
 composer.addPass(cinematicPass)
 composer.addPass(new OutputPass())
+
+// Sync all pass targets (incl. bloom pyramid) to current viewport × DPR
+composer.setSize(window.innerWidth, window.innerHeight)
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 let autoSpin = !reducedMotion.matches
@@ -264,9 +262,9 @@ function applyUi() {
   applyBackFaceParams(backMaterial, material, values.translucency)
   applyGlassInteriorRimParams(interiorRimMaterial, values)
 
-  bloomPass.strength = values.bloom * 1.05
-  bloomPass.radius = THREE.MathUtils.lerp(0.45, 0.68, values.bloom / 1.5)
-  bloomPass.threshold = 0.82
+  bloomPass.setStrength(values.bloom * 1.15)
+  bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, values.bloom / 1.5))
+  bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, values.bloom / 1.5))
   rimMaterial.uniforms.intensity.value = 0.36 + values.bloom * 0.4 + values.dispersion * 0.065
 
   setValueLabel('dispersion', values.dispersion.toFixed(2))
