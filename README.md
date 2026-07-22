@@ -35,7 +35,7 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
   - Depth of field (Bokeh)
   - Afterimage / ghost trails
   - Halftone CMYK
-  - ASCII em tempo real
+  - ASCII em tempo real **só no cubo** (glifos inteiros via máscara por célula)
   - Aberração cromática / vinheta / grain
 - Presets artísticos (studio, anamorphic, portrait, neon ASCII, ghost trail, print shop, prism chaos)
 - Controles de render: exposure, DPR, transmission scale, tone map

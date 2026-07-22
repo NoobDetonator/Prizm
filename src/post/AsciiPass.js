@@ -10,8 +10,9 @@ import {
 import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js'
 
 /**
- * Real-time ASCII overlay pass — reusable on any EffectComposer stack.
- * Builds a glyph atlas once and maps scene luminance to characters.
+ * Real-time ASCII pass — reusable on any EffectComposer stack.
+ * Optional coverage mask: only cells whose center hits the mask become glyphs,
+ * so a cube can be fully ASCII while the backdrop stays clean (no clipped chars).
  */
 export class AsciiPass extends Pass {
   /**
@@ -19,12 +20,14 @@ export class AsciiPass extends Pass {
    * @param {number} [options.amount=0] 0 = off, 1 = full ASCII
    * @param {number} [options.cellSize=10] pixel cell size
    * @param {boolean} [options.colorize=true] tint glyphs with scene color
+   * @param {boolean} [options.solid=true] paint dark cell bg so the form reads as a block
    * @param {string} [options.charset] denser = brighter
    */
   constructor({
     amount = 0,
     cellSize = 10,
     colorize = true,
+    solid = true,
     charset = ' .\'`^",:;Il!i~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
   } = {}) {
     super()
@@ -32,19 +35,24 @@ export class AsciiPass extends Pass {
     this.amount = amount
     this.cellSize = cellSize
     this.colorize = colorize
+    this.solid = solid
     this.enabled = true
 
     this._atlas = createGlyphAtlas(charset)
     this._material = new ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null },
+        tMask: { value: null },
         tAtlas: { value: this._atlas.texture },
         resolution: { value: new Vector2(1, 1) },
         cellSize: { value: cellSize },
         glyphCount: { value: this._atlas.count },
         amount: { value: amount },
         colorize: { value: colorize ? 1 : 0 },
-        invert: { value: 0 },
+        solid: { value: solid ? 1 : 0 },
+        useMask: { value: 0 },
+        contrast: { value: 1.35 },
+        maskThreshold: { value: 0.28 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -71,6 +79,23 @@ export class AsciiPass extends Pass {
     this._material.uniforms.colorize.value = enabled ? 1 : 0
   }
 
+  setSolid(enabled) {
+    this.solid = enabled
+    this._material.uniforms.solid.value = enabled ? 1 : 0
+  }
+
+  setContrast(value) {
+    this._material.uniforms.contrast.value = value
+  }
+
+  /**
+   * @param {import('three').Texture | null} texture cube/object coverage mask
+   */
+  setMaskTexture(texture) {
+    this._material.uniforms.tMask.value = texture
+    this._material.uniforms.useMask.value = texture ? 1 : 0
+  }
+
   setSize(width, height) {
     this._material.uniforms.resolution.value.set(width, height)
   }
@@ -79,7 +104,6 @@ export class AsciiPass extends Pass {
     this._material.uniforms.tDiffuse.value = readBuffer.texture
 
     if (!this.enabled || this.amount <= 0.001) {
-      // Passthrough via amount=0 still samples correctly
       this._material.uniforms.amount.value = 0
     } else {
       this._material.uniforms.amount.value = this.amount
@@ -115,7 +139,7 @@ function createGlyphAtlas(charset) {
   ctx.fillStyle = '#fff'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = `bold ${Math.floor(cell * 0.78)}px "Courier New", ui-monospace, monospace`
+  ctx.font = `bold ${Math.floor(cell * 0.82)}px "Courier New", ui-monospace, monospace`
 
   for (let i = 0; i < chars.length; i++) {
     ctx.fillText(chars[i], (i + 0.5) * cell, cell * 0.55)
@@ -142,16 +166,33 @@ const VERT = /* glsl */ `
 
 const FRAG = /* glsl */ `
   uniform sampler2D tDiffuse;
+  uniform sampler2D tMask;
   uniform sampler2D tAtlas;
   uniform vec2 resolution;
   uniform float cellSize;
   uniform float glyphCount;
   uniform float amount;
   uniform float colorize;
+  uniform float solid;
+  uniform float useMask;
+  uniform float contrast;
+  uniform float maskThreshold;
   varying vec2 vUv;
 
   float luma(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
+  }
+
+  float cellMask(vec2 cellUv) {
+    if (useMask < 0.5) return 1.0;
+    // Sample a small neighborhood so thin glass edges still light up a cell
+    vec2 texel = 1.0 / resolution;
+    float m = texture2D(tMask, cellUv).r;
+    m = max(m, texture2D(tMask, cellUv + vec2( texel.x * cellSize * 0.25, 0.0)).r);
+    m = max(m, texture2D(tMask, cellUv - vec2( texel.x * cellSize * 0.25, 0.0)).r);
+    m = max(m, texture2D(tMask, cellUv + vec2(0.0,  texel.y * cellSize * 0.25)).r);
+    m = max(m, texture2D(tMask, cellUv - vec2(0.0,  texel.y * cellSize * 0.25)).r);
+    return step(maskThreshold, m);
   }
 
   void main() {
@@ -166,26 +207,34 @@ const FRAG = /* glsl */ `
     vec2 pixel = vUv * resolution;
     vec2 cellCoord = floor(pixel / cell);
     vec2 cellUv = (cellCoord + 0.5) * cell / resolution;
+    float onObject = cellMask(cellUv);
+
+    if (onObject < 0.5) {
+      gl_FragColor = vec4(src, 1.0);
+      return;
+    }
 
     vec3 sampleColor = texture2D(tDiffuse, cellUv).rgb;
     float brightness = clamp(luma(sampleColor), 0.0, 1.0);
+    // Punch contrast so glass highlights become dense glyphs
+    brightness = clamp(pow(brightness, 1.0 / max(contrast, 0.2)), 0.0, 1.0);
 
     float glyphIndex = floor(brightness * (glyphCount - 1.0) + 0.5);
     vec2 local = fract(pixel / cell);
-    // Flip Y so glyphs read upright
     local.y = 1.0 - local.y;
 
     float atlasU = (glyphIndex + local.x) / glyphCount;
-    float atlasV = local.y;
-    float glyph = texture2D(tAtlas, vec2(atlasU, atlasV)).r;
+    float glyph = texture2D(tAtlas, vec2(atlasU, local.y)).r;
 
-    vec3 asciiColor = colorize > 0.5
-      ? sampleColor * (0.35 + glyph * 1.35)
+    vec3 ink = colorize > 0.5
+      ? sampleColor * (0.25 + glyph * 1.55)
       : vec3(glyph);
 
-    // Slight cell grid breathing for a terminal feel
-    float grid = smoothstep(0.02, 0.08, min(min(local.x, local.y), min(1.0 - local.x, 1.0 - local.y)));
-    asciiColor *= 0.82 + grid * 0.18;
+    vec3 paper = solid > 0.5 ? sampleColor * 0.08 : src;
+    vec3 asciiColor = mix(paper, ink, max(glyph, 0.04));
+
+    float grid = smoothstep(0.015, 0.07, min(min(local.x, local.y), min(1.0 - local.x, 1.0 - local.y)));
+    asciiColor *= 0.88 + grid * 0.14;
 
     vec3 color = mix(src, asciiColor, amount);
     gl_FragColor = vec4(color, 1.0);

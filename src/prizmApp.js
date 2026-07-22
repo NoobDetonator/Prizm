@@ -236,12 +236,14 @@ composer.addPass(cinematicPass)
 const halftonePass = new HalftoneStylePass({ amount: 0, radius: 3.4, shape: 1 })
 composer.addPass(halftonePass)
 
-const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true })
-composer.addPass(asciiPass)
-
 const selectivePass = new SelectiveCubeCompositePass(cleanSavePass.renderTarget.texture, cubeMask.texture)
 selectivePass.setSelective(true)
 composer.addPass(selectivePass)
+
+// ASCII after selective mix: whole glyphs only on cube cells, streetwear stays clean.
+const asciiPass = new AsciiPass({ amount: 0, cellSize: 10, colorize: true, solid: true })
+asciiPass.setMaskTexture(cubeMask.texture)
+composer.addPass(asciiPass)
 
 composer.addPass(new OutputPass())
 composer.setSize(window.innerWidth, window.innerHeight)
@@ -377,6 +379,8 @@ function applyUi() {
 
   asciiPass.setAmount(values.ascii)
   asciiPass.setCellSize(values.asciiCell)
+  asciiPass.setContrast(1.15 + values.ascii * 0.55)
+  asciiPass.setMaskTexture(cubeMask.texture)
   asciiPass.enabled = values.ascii > 0.01
 
   cinematicPass.uniforms.intensity.value = values.chroma
@@ -520,6 +524,8 @@ function onResize() {
   cubeMask.setSize(width * dpr, height * dpr)
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   selectivePass.setMaskTexture(cubeMask.texture)
+  asciiPass.setMaskTexture(cubeMask.texture)
+  asciiPass.setSize(width * dpr, height * dpr)
   dofPass.syncCamera(camera)
 }
 
@@ -550,6 +556,7 @@ function animate(now) {
   cubeMask.renderMask(renderer, scene, camera, [streetwear])
   selectivePass.setMaskTexture(cubeMask.texture)
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+  asciiPass.setMaskTexture(cubeMask.texture)
   composer.render()
 }
 
@@ -576,6 +583,8 @@ async function exportRender(scale = 2) {
     cubeMask.renderMask(renderer, scene, camera, [streetwear])
     selectivePass.setMaskTexture(cubeMask.texture)
     selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+    asciiPass.setMaskTexture(cubeMask.texture)
+    asciiPass.setSize(width, height)
     composer.render()
 
     const blob = await new Promise((resolve, reject) => {
