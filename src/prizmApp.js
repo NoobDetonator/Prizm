@@ -274,6 +274,7 @@ async function boot() {
     scene,
     environment: activeEnvironment,
     camera,
+    controls,
     prism,
     material,
     backMaterial,
@@ -295,6 +296,90 @@ async function boot() {
     exportRender,
     applyUi,
     readUi,
+    applyLook(key) {
+      if (!applyLookPreset(ui, key)) return false
+      if (ui.look) ui.look.value = key
+      if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
+        ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+      }
+      applyUi()
+      return true
+    },
+    setAutoSpin(value) {
+      autoSpin = Boolean(value)
+    },
+    lockCamera() {
+      autoSpin = false
+      prism.rotation.set(0.33, 0.66, 0.085)
+      camera.position.set(2.55, 1.75, 3.75)
+      camera.position.multiplyScalar(1 + Math.max(0, 1.05 - camera.aspect) * 0.9)
+      controls.target.set(0, -0.04, 0)
+      controls.update()
+    },
+    async captureDataURL(scale = 1, { restore = true } = {}) {
+      const previousSpin = autoSpin
+      autoSpin = false
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const width = Math.round(viewportWidth * scale)
+      const height = Math.round(viewportHeight * scale)
+      renderer.setPixelRatio(1)
+      renderer.setSize(width, height, false)
+      composer.setPixelRatio(1)
+      composer.setSize(width, height)
+      cubeMask.setSize(width, height)
+      cubeMask.renderMask(renderer, scene, camera, [streetwear])
+      selectivePass.setMaskTexture(cubeMask.texture)
+      selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
+      asciiPass.setMaskTexture(cubeMask.texture)
+      asciiPass.setSize(width, height)
+      composer.render()
+      const dataURL = canvas.toDataURL('image/png')
+      autoSpin = previousSpin
+      if (restore) onResize()
+      return dataURL
+    },
+    /** Raw RGBA bytes of the current canvas (after one locked compose). */
+    async capturePixels(scale = 1) {
+      await this.captureDataURL(scale, { restore: false })
+      const ctx = canvas.getContext('2d')
+      // WebGL canvas: draw to 2d for readback
+      const probe = document.createElement('canvas')
+      probe.width = canvas.width
+      probe.height = canvas.height
+      const pctx = probe.getContext('2d')
+      pctx.drawImage(canvas, 0, 0)
+      const image = pctx.getImageData(0, 0, probe.width, probe.height)
+      onResize()
+      return {
+        width: probe.width,
+        height: probe.height,
+        rgba: Array.from(image.data),
+      }
+    },
+    sampleRenderStats() {
+      renderer.info.autoReset = false
+      renderer.info.reset()
+      cubeMask.renderMask(renderer, scene, camera, [streetwear])
+      composer.render()
+      const snapshot = {
+        calls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        points: renderer.info.render.points,
+        lines: renderer.info.render.lines,
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+      }
+      renderer.info.autoReset = true
+      return snapshot
+    },
+    stats: {
+      frameMs: 0,
+      fps: 0,
+      calls: 0,
+      triangles: 0,
+      _samples: [],
+    },
   }
 
   try {
@@ -558,6 +643,19 @@ function animate(now) {
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   asciiPass.setMaskTexture(cubeMask.texture)
   composer.render()
+
+  // Moving average frame time for Phase 0 / Phase 5 instrumentation
+  if (window.__prizm?.stats) {
+    const frameMs = delta * 1000
+    const samples = window.__prizm.stats._samples
+    samples.push(frameMs)
+    if (samples.length > 60) samples.shift()
+    const avg = samples.reduce((a, b) => a + b, 0) / samples.length
+    window.__prizm.stats.frameMs = avg
+    window.__prizm.stats.fps = avg > 0 ? 1000 / avg : 0
+    window.__prizm.stats.calls = renderer.info.render.calls
+    window.__prizm.stats.triangles = renderer.info.render.triangles
+  }
 }
 
 async function exportRender(scale = 2) {
