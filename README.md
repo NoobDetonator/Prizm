@@ -91,6 +91,10 @@ renderer.render(scene, camera)
 Procedural presets: `spectral`, `midnight`, `tungsten`, `disco`, `overcast`, `aurora`  
 Artistic presets: `gradientStudio`, `neonAlley`, `paperSky`, `emberHall`, `iceRink`
 
+### HDR quality
+
+Desktop defaults to **high** IBL (4096×2048 float equirect → sharper PMREM speculars). Mobile uses **medium** (2048). Artistic plates are converted to **linear float** with highlight boost (not clipped LDR). Force with `?envQuality=high` or `?envQuality=medium`.
+
 ## Honest physics map
 
 | Phenomenon | Nature | In Prizm |
