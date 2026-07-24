@@ -140,7 +140,8 @@ controls.target.set(0, -0.04, 0)
 controls.update()
 
 const environmentCache = new Map()
-let activeEnvironment = createPrismEnvironment(renderer, 'spectral')
+let envQuality = pickEnvQuality()
+let activeEnvironment = createPrismEnvironment(renderer, 'spectral', { quality: envQuality })
 environmentCache.set('proc:spectral', activeEnvironment)
 scene.environment = activeEnvironment
 scene.environmentIntensity = 2.5
@@ -351,6 +352,21 @@ async function boot() {
       applyUi()
       return kind
     },
+    get envQuality() {
+      return envQuality
+    },
+    async setEnvQuality(quality) {
+      if (quality !== 'high' && quality !== 'medium') return envQuality
+      if (quality === envQuality) return envQuality
+      envQuality = quality
+      const current = ui.envSource?.value || 'proc:spectral'
+      environmentCache.clear()
+      referenceEnvironment = null
+      hdrEnvironment = null
+      await switchEnvironment(current)
+      applyUi()
+      return envQuality
+    },
     listEnvironments() {
       return {
         procedural: Object.values(PROCEDURAL_ENV_PRESETS).map((p) => ({
@@ -492,6 +508,18 @@ function syncEnvNote(kind) {
   if (kind === 'procedural') ui.envNote.textContent = PROCEDURAL_ENV_PRESETS.spectral.note
 }
 
+function pickEnvQuality() {
+  const params = new URLSearchParams(window.location.search)
+  const forced = params.get('envQuality')
+  if (forced === 'high' || forced === 'medium') return forced
+
+  const mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '')
+  if (mobile) return 'medium' // 2048 equirect — cheaper PMREM
+  // Desktop / headless: prefer high. VMs often report low deviceMemory/cores.
+  if (navigator.deviceMemory && navigator.deviceMemory <= 2) return 'medium'
+  return 'high' // 4096 equirect → sharper PMREM speculars
+}
+
 async function ensureEnvironment(kind) {
   // Legacy aliases
   if (kind === 'procedural') kind = 'proc:spectral'
@@ -500,14 +528,14 @@ async function ensureEnvironment(kind) {
 
   if (kind.startsWith('proc:')) {
     const id = kind.slice(5)
-    const env = createPrismEnvironment(renderer, id)
+    const env = createPrismEnvironment(renderer, id, { quality: envQuality })
     environmentCache.set(kind, env)
     return env
   }
 
   if (kind.startsWith('art:')) {
     const id = kind.slice(4)
-    const env = createArtisticEnvironment(renderer, id)
+    const env = createArtisticEnvironment(renderer, id, { quality: envQuality })
     environmentCache.set(kind, env)
     return env
   }
@@ -517,7 +545,7 @@ async function ensureEnvironment(kind) {
       referenceEnvironment = await loadArtisticImageEnvironment(
         renderer,
         '/assets/prism-environment-reference.png',
-        { exposure: 2.0 },
+        { exposure: 1.7, quality: envQuality, highlightBoost: 5.5 },
       )
     }
     environmentCache.set('reference', referenceEnvironment)

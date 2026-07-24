@@ -51,8 +51,9 @@ export function createPhysicalGlassMaterial(textures, presetKey = 'crystal') {
     specularIntensity: 1,
     specularColor: new THREE.Color('#ffffff'),
     envMapIntensity: preset.envMapIntensity,
+    // Slightly snappier coat so high-res PMREM suns read as sharp glints
     clearcoat: 1,
-    clearcoatRoughness: 0.02,
+    clearcoatRoughness: 0.012,
     attenuationColor: new THREE.Color(preset.attenuationColor),
     attenuationDistance: preset.attenuationDistance,
     transparent: false,

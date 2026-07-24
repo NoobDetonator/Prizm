@@ -1,24 +1,30 @@
 import * as THREE from 'three'
+import {
+  ENV_QUALITY,
+  buildPmremFromEquirect,
+  canvasToFloatEquirect,
+} from './buildPmremFromEquirect.js'
 
 /**
- * Artistic LDR image → equirectangular PMREM.
- * This is NOT physically correct IBL (PNG poles distort; values clamp at 1.0).
- * Kept as a creative lighting plate. Use `exposure` to push some dynamic range
- * into the canvas before PMREM so speculars can still bloom.
+ * Artistic LDR image → float linear equirect → PMREM.
+ * Not physically correct IBL (PNG poles distort), but highlights now exceed 1.0
+ * so glass speculars / bloom can spark instead of hard-clipping at white.
  */
 export async function loadArtisticImageEnvironment(renderer, url, options = {}) {
-  const size = options.size ?? 2048
-  const saturation = options.saturation ?? 1.28
-  const contrast = options.contrast ?? 1.18
-  const brightness = options.brightness ?? 1.08
-  const exposure = options.exposure ?? 2.0
+  const quality = ENV_QUALITY[options.quality] ?? ENV_QUALITY.high
+  const size = options.size ?? quality.equirectWidth
+  const saturation = options.saturation ?? 1.22
+  const contrast = options.contrast ?? 1.12
+  const brightness = options.brightness ?? 1.05
+  const exposure = options.exposure ?? 1.7
+  const highlightBoost = options.highlightBoost ?? 5.5
 
   const source = await new THREE.TextureLoader().loadAsync(url)
   const image = source.image
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size / 2
-  const ctx = canvas.getContext('2d')
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.fillStyle = '#000000'
@@ -39,38 +45,31 @@ export async function loadArtisticImageEnvironment(renderer, url, options = {}) 
     sx = (image.width - sw) / 2
   }
 
-  // Bake exposure into the LDR plate so PMREM gets brighter midtones/highlights.
-  ctx.filter = `saturate(${saturation}) contrast(${contrast}) brightness(${brightness * exposure})`
+  // Grade in LDR first (canvas filters), then expand to float radiance.
+  ctx.filter = `saturate(${saturation}) contrast(${contrast}) brightness(${brightness})`
   ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
   ctx.filter = 'none'
 
   const seam = ctx.createLinearGradient(0, 0, canvas.width, 0)
-  seam.addColorStop(0, 'rgba(0,0,0,0.88)')
-  seam.addColorStop(0.045, 'rgba(0,0,0,0)')
-  seam.addColorStop(0.955, 'rgba(0,0,0,0)')
-  seam.addColorStop(1, 'rgba(0,0,0,0.88)')
+  seam.addColorStop(0, 'rgba(0,0,0,0.7)')
+  seam.addColorStop(0.035, 'rgba(0,0,0,0)')
+  seam.addColorStop(0.965, 'rgba(0,0,0,0)')
+  seam.addColorStop(1, 'rgba(0,0,0,0.7)')
   ctx.fillStyle = seam
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  const equirectangular = new THREE.CanvasTexture(canvas)
-  equirectangular.mapping = THREE.EquirectangularReflectionMapping
-  equirectangular.colorSpace = THREE.SRGBColorSpace
-  equirectangular.minFilter = THREE.LinearFilter
-  equirectangular.magFilter = THREE.LinearFilter
-  equirectangular.needsUpdate = true
-
-  const pmrem = new THREE.PMREMGenerator(renderer)
-  pmrem.compileEquirectangularShader()
-  const environment = pmrem.fromEquirectangular(equirectangular).texture
-  environment.userData.source = url
-  environment.userData.kind = 'artistic-ldr'
-  environment.userData.exposure = exposure
-  environment.userData.sourceSize = [image.width, image.height]
-  environment.userData.equirect = equirectangular
-
+  const equirect = canvasToFloatEquirect(canvas, { exposure, highlightBoost })
   source.dispose()
-  pmrem.dispose()
-  return environment
+
+  return buildPmremFromEquirect(renderer, equirect, {
+    source: url,
+    kind: 'artistic-ldr-float',
+    exposure,
+    highlightBoost,
+    sourceSize: [image.width, image.height],
+    quality: quality.label,
+    equirectSize: [canvas.width, canvas.height],
+  })
 }
 
 /** @deprecated use loadArtisticImageEnvironment */
