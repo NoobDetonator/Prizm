@@ -51,7 +51,8 @@ export function createPrismEnvironment(renderer) {
   const pmrem = new THREE.PMREMGenerator(renderer)
   pmrem.compileEquirectangularShader()
   const envMap = pmrem.fromEquirectangular(texture).texture
-  texture.dispose()
+  // Keep equirect for custom prism shaders (PMREM is CubeUV — not samplerCube).
+  envMap.userData.equirect = texture
   pmrem.dispose()
   return envMap
 }

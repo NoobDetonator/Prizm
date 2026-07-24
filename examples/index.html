@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prizm lib — examples</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07080c;
+        --ink: #e8eef8;
+        --muted: #8b97a8;
+        --line: #1c2430;
+        --accent: #5ec8ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(1200px 600px at 10% -10%, #122033 0%, transparent 55%),
+          radial-gradient(900px 500px at 100% 0%, #1a1210 0%, transparent 50%),
+          var(--bg);
+        color: var(--ink);
+        padding: 48px 28px 64px;
+      }
+      h1 {
+        font-family: "IBM Plex Serif", Georgia, serif;
+        font-weight: 500;
+        font-size: clamp(2rem, 4vw, 3rem);
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      p { color: var(--muted); max-width: 42rem; line-height: 1.5; }
+      ul { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 12px; max-width: 36rem; }
+      a {
+        display: block;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        text-decoration: none;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+      }
+      a:hover { border-color: var(--accent); color: var(--accent); }
+      code { color: var(--accent); font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <h1>Prizm lib</h1>
+    <p>
+      Reusable <code>createPrism()</code> on arbitrary meshes. Custom engine uses
+      double-refraction + spectral sampling; call <code>beforeRender</code> each frame.
+    </p>
+    <ul>
+      <li><a href="./box.html">Rounded box</a></li>
+      <li><a href="./torusknot.html">Torus knot</a></li>
+      <li><a href="./two-prisms.html">Two instances</a></li>
+      <li><a href="./gltf.html">Multi-mesh “gltf-like” group</a></li>
+      <li><a href="./embedded.html">Embedded in a page layout</a></li>
+      <li><a href="./physical.html">Physical transmission engine</a></li>
+    </ul>
+  </body>
+</html>

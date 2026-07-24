@@ -14,8 +14,8 @@ export async function loadHdrEnvironment(renderer, url) {
   const environment = pmrem.fromEquirectangular(texture).texture
   environment.userData.source = url
   environment.userData.kind = 'hdr'
+  environment.userData.equirect = texture
 
-  texture.dispose()
   pmrem.dispose()
   return environment
 }

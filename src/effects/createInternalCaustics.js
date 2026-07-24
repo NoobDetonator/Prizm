@@ -81,6 +81,15 @@ export function createInternalCaustics() {
   }
 
   group.userData.setIntensity(intensity)
+
+  group.userData.dispose = () => {
+    for (const blade of blades) {
+      blade.geometry?.dispose?.()
+      blade.material?.map?.dispose?.()
+      blade.material?.dispose?.()
+    }
+  }
+
   return group
 }
 

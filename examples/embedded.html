@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prizm lib — embedded</title>
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --panel: #12151c;
+        --ink: #eef3fa;
+        --muted: #93a0b3;
+        --accent: #6ad0ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) minmax(280px, 1.2fr);
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      }
+      @media (max-width: 800px) {
+        body { grid-template-columns: 1fr; }
+      }
+      .copy {
+        padding: 48px 36px;
+        background:
+          linear-gradient(160deg, #152033 0%, transparent 45%),
+          var(--panel);
+      }
+      h1 {
+        font-family: "IBM Plex Serif", Georgia, serif;
+        font-weight: 500;
+        font-size: clamp(2rem, 4vw, 2.8rem);
+        margin: 0 0 12px;
+      }
+      p { color: var(--muted); line-height: 1.55; max-width: 34rem; }
+      .stage {
+        position: relative;
+        min-height: 420px;
+        background: #000;
+      }
+      canvas { width: 100%; height: 100%; display: block; }
+      .label {
+        position: absolute;
+        left: 16px;
+        bottom: 14px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        opacity: 0.85;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="copy">
+      <h1>Embedded prism</h1>
+      <p>
+        The library owns no DOM chrome — drop a canvas in any layout, call
+        <code>createPrism</code>, and drive <code>beforeRender</code> /
+        <code>update</code> from your own loop.
+      </p>
+    </section>
+    <section class="stage">
+      <canvas id="c"></canvas>
+      <div class="label">createPrism · custom engine</div>
+    </section>
+    <script type="module">
+      import * as THREE from 'three'
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+      import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+      import { createPrism, createPrismEnvironment } from '../src/lib/prizm/index.js'
+
+      const canvas = document.querySelector('#c')
+      const stage = canvas.parentElement
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.outputColorSpace = THREE.SRGBColorSpace
+
+      const scene = new THREE.Scene()
+      scene.background = new THREE.Color('#03040a')
+      scene.environment = createPrismEnvironment(renderer)
+      scene.environmentIntensity = 2.6
+
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100)
+      camera.position.set(2.2, 1.4, 3.1)
+      const controls = new OrbitControls(camera, canvas)
+      controls.enableDamping = true
+
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(10, 7),
+        new THREE.MeshBasicMaterial({ color: '#e7eef8' }),
+      )
+      wall.position.z = -2.6
+      scene.add(wall)
+
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(1.5, 1.35, 1.4, 7, 0.1))
+      scene.add(mesh)
+
+      const prism = createPrism({ renderer, preset: 'crystal' })
+      prism.attach(mesh)
+
+      function resize() {
+        const w = stage.clientWidth
+        const h = stage.clientHeight
+        camera.aspect = w / Math.max(h, 1)
+        camera.updateProjectionMatrix()
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+        renderer.setSize(w, h, false)
+      }
+      resize()
+      addEventListener('resize', resize)
+
+      const t0 = performance.now()
+      ;(function frame(now) {
+        requestAnimationFrame(frame)
+        const t = (now - t0) * 0.001
+        mesh.rotation.y = t * 0.4
+        controls.update()
+        prism.beforeRender(renderer, scene, camera)
+        prism.update(t)
+        renderer.render(scene, camera)
+      })(t0)
+    </script>
+  </body>
+</html>

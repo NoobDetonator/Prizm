@@ -66,9 +66,9 @@ export async function loadArtisticImageEnvironment(renderer, url, options = {}) 
   environment.userData.kind = 'artistic-ldr'
   environment.userData.exposure = exposure
   environment.userData.sourceSize = [image.width, image.height]
+  environment.userData.equirect = equirectangular
 
   source.dispose()
-  equirectangular.dispose()
   pmrem.dispose()
   return environment
 }
