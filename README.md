@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+Entry: `index.html` → `src/main.js`. Não criar arquivos `V2` / `New` / `Final` — editar o existente e apagar o que for substituído.
+
 ## Física mapeada no material
 
 | Fenômeno | Na natureza | No Three.js |

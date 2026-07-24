@@ -2,7 +2,7 @@
 
 **Repositório:** `NoobDetonator/Prizm`
 **Stack:** Three.js 0.178, Vite 7, sem dependências extras
-**Entry real:** `index.html` → `src/prizmApp.js`
+**Entry real:** `index.html` → `src/main.js`
 **Branch de trabalho:** `cursor/fix-render-pipeline-44e4`
 **Objetivo final:** material/shader de prisma reutilizável em qualquer geometria, com demo.
 
