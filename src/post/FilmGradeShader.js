@@ -30,7 +30,8 @@ export const FilmGradeShader = {
     }
 
     void main() {
-      vec3 color = texture2D(tDiffuse, vUv).rgb;
+      vec4 src = texture2D(tDiffuse, vUv);
+      vec3 color = src.rgb;
       vec2 centered = vUv - 0.5;
       float dist = length(centered);
 
@@ -39,9 +40,9 @@ export const FilmGradeShader = {
 
       float peak = max(color.r, max(color.g, color.b));
       float noise = hash(gl_FragCoord.xy + vec2(time * 71.0, time * 43.0)) - 0.5;
-      color += noise * grain * (0.35 + peak * 0.65);
+      color += noise * grain * (0.35 + peak * 0.65) * src.a;
 
-      gl_FragColor = vec4(color, 1.0);
+      gl_FragColor = vec4(color, src.a);
     }
   `,
 }

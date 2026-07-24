@@ -132,6 +132,41 @@ export const PROCEDURAL_ENV_PRESETS = {
       { x: 0.48, y: 0.22, r: 0.05, rgb: [40, 70, 55], gain: 1 },
     ],
   },
+
+  /**
+   * Transparent-void IBL — near-black fill, absurd hot slits for liquid
+   * prismatic reflections. Background stays clear; only the crystal reads light.
+   */
+  liquidVoid: {
+    id: 'liquidVoid',
+    label: 'Liquid void',
+    note: 'black void · absurd spectral slits',
+    fill: [0.0004, 0.0005, 0.0008],
+    pockets: [
+      // Tiny cool/warm whispers — keep body from going pure black in the core
+      { x: 0.42, y: 0.48, r: 0.22, rgb: [0.08, 0.12, 0.35], gain: 0.55 },
+      { x: 0.62, y: 0.52, r: 0.18, rgb: [0.28, 0.06, 0.12], gain: 0.45 },
+    ],
+    blades: [
+      // Thick white “liquid” ribbon
+      { x: 0.5, w: 0.028, peak: [90, 90, 95], edge: [8, 10, 18] },
+      // Spectral companions — absurd color splits
+      { x: 0.38, w: 0.012, peak: [55, 4, 8], edge: [2, 0.1, 0.2] },
+      { x: 0.44, w: 0.01, peak: [40, 28, 2], edge: [1.2, 0.8, 0.05] },
+      { x: 0.56, w: 0.01, peak: [2, 40, 12], edge: [0.05, 1.2, 0.35] },
+      { x: 0.61, w: 0.011, peak: [4, 14, 55], edge: [0.1, 0.4, 1.8] },
+      { x: 0.72, w: 0.008, peak: [35, 6, 40], edge: [1, 0.15, 1.2] },
+      { x: 0.28, w: 0.007, peak: [8, 30, 45], edge: [0.2, 0.9, 1.4] },
+      { x: 0.18, w: 0.006, peak: [50, 12, 4], edge: [1.5, 0.3, 0.1] },
+    ],
+    suns: [
+      // Hot pin lights — sharp glints, not flood fill
+      { x: 0.5, y: 0.3, r: 0.028, rgb: [140, 140, 150], gain: 1 },
+      { x: 0.33, y: 0.62, r: 0.018, rgb: [90, 35, 20], gain: 1 },
+      { x: 0.7, y: 0.58, r: 0.016, rgb: [25, 50, 110], gain: 1 },
+      { x: 0.58, y: 0.22, r: 0.012, rgb: [100, 90, 40], gain: 1 },
+    ],
+  },
 }
 
 export const DEFAULT_PROCEDURAL_ENV = 'spectral'

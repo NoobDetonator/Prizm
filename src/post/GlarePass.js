@@ -262,10 +262,12 @@ const FRAG_COMPOSITE = /* glsl */ `
   varying vec2 vUv;
 
   void main() {
-    vec3 src = texture2D(tDiffuse, vUv).rgb;
+    vec4 src4 = texture2D(tDiffuse, vUv);
+    vec3 src = src4.rgb;
     vec3 glare = texture2D(tGlareA, vUv).rgb + texture2D(tGlareB, vUv).rgb * 0.45;
     glare *= strength;
     glare = glare / (vec3(1.0) + glare * 0.65);
-    gl_FragColor = vec4(src + glare, 1.0);
+    float glareA = max(glare.r, max(glare.g, glare.b));
+    gl_FragColor = vec4(src + glare, max(src4.a, smoothstep(0.02, 0.4, glareA)));
   }
 `

@@ -286,7 +286,8 @@ const FRAG_COMPOSITE = /* glsl */ `
   varying vec2 vUv;
 
   void main() {
-    vec3 src = texture2D(tDiffuse, vUv).rgb;
+    vec4 src4 = texture2D(tDiffuse, vUv);
+    vec3 src = src4.rgb;
     vec2 t = bloomTexel;
     vec3 bloom =
         texture2D(tBloom, vUv).rgb * 0.36
@@ -297,6 +298,7 @@ const FRAG_COMPOSITE = /* glsl */ `
 
     vec3 glow = max(bloom, vec3(0.0)) * strength;
     glow = glow / (vec3(1.0) + glow * 0.5);
-    gl_FragColor = vec4(src + glow, 1.0);
+    float glowA = max(glow.r, max(glow.g, glow.b));
+    gl_FragColor = vec4(src + glow, max(src4.a, smoothstep(0.02, 0.35, glowA)));
   }
 `

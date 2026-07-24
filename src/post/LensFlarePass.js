@@ -203,9 +203,10 @@ const FRAG_FLARE = /* glsl */ `
   }
 
   void main() {
-    vec3 src = texture2D(tDiffuse, vUv).rgb;
+    vec4 src4 = texture2D(tDiffuse, vUv);
+    vec3 src = src4.rgb;
     if (strength < 0.001) {
-      gl_FragColor = vec4(src, 1.0);
+      gl_FragColor = src4;
       return;
     }
 
@@ -236,6 +237,7 @@ const FRAG_FLARE = /* glsl */ `
 
     flare *= strength;
     flare = flare / (vec3(1.0) + flare);
-    gl_FragColor = vec4(src + flare, 1.0);
+    float flareA = max(flare.r, max(flare.g, flare.b));
+    gl_FragColor = vec4(src + flare, max(src4.a, smoothstep(0.02, 0.35, flareA)));
   }
 `

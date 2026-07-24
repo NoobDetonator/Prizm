@@ -87,11 +87,11 @@ const FRAG = /* glsl */ `
   varying vec2 vUv;
 
   void main() {
-    vec3 stylized = texture2D(tDiffuse, vUv).rgb;
-    vec3 clean = texture2D(tClean, vUv).rgb;
+    vec4 stylized = texture2D(tDiffuse, vUv);
+    vec4 clean = texture2D(tClean, vUv);
 
     if (enabled < 0.5) {
-      gl_FragColor = vec4(stylized, 1.0);
+      gl_FragColor = stylized;
       return;
     }
 
@@ -100,6 +100,7 @@ const FRAG = /* glsl */ `
     float soft = max(edgeSoftness, 0.001);
     float m = smoothstep(0.08, 0.08 + soft, mask);
 
-    gl_FragColor = vec4(mix(clean, stylized, m), 1.0);
+    // Preserve clean alpha outside the cube (transparent void looks).
+    gl_FragColor = mix(clean, vec4(stylized.rgb, max(stylized.a, m)), m);
   }
 `
