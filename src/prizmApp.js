@@ -10,7 +10,8 @@ import { createPrismTexture } from './textures/createPrismTexture.js'
 import { createPrismEnvironment } from './env/createPrismEnvironment.js'
 import { loadImageEnvironment } from './env/loadImageEnvironment.js'
 import { createStreetwearBackdrop } from './backdrop/createStreetwearBackdrop.js'
-import { CinematicPrismShader } from './post/CinematicPrismShader.js'
+import { ChromaShader } from './post/ChromaShader.js'
+import { FilmGradeShader } from './post/FilmGradeShader.js'
 import { QualityBloomPass } from './post/QualityBloomPass.js'
 import { GlarePass } from './post/GlarePass.js'
 import { LensFlarePass } from './post/LensFlarePass.js'
@@ -196,15 +197,53 @@ composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
 composer.addPass(new RenderPass(scene, camera))
 
-// Freeze a clean beauty copy BEFORE stylization so the backdrop stays untouched.
+/*
+ * Post pipeline (why this order):
+ * 1–2  Beauty + SavePass — clean plate for selective restore of the backdrop.
+ * 3–5  Destructive stylization (halftone / afterimage / chroma) → cube only via mix.
+ * 6    SelectiveCubeComposite — restore clean pixels outside the prism mask.
+ * 7    ASCII — cell-masked grayscale glyphs on the cube only.
+ * 8–10 Optical FX — bright extract is MASKED to the cube, but bloom/glare/flare
+ *      composite across the full frame so halos/streaks/ghosts can spill.
+ * 11   DoF — after mix so the streetwear wall can blur while the cube stays sharp.
+ * 12   Film grade — vignette + grain on the whole frame (not clipped to the cube).
+ * 13   Output
+ */
 const cleanSavePass = new SavePass()
 composer.addPass(cleanSavePass)
 
-const cubeMask = createCubeMaskRenderer()
+const cubeMask = createCubeMaskRenderer({ halfRes: true, samples: 4 })
 cubeMask.setSize(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio())
 
-// Pipeline: beauty → save clean → DoF → bloom → glare → flare → afterimage → cinematic →
-// halftone → ASCII → selective mix (cube only) → output
+const afterimagePass = new AfterimageStylePass(0)
+composer.addPass(afterimagePass)
+
+const halftonePass = new HalftoneStylePass({ amount: 0, radius: 3.4, shape: 1 })
+composer.addPass(halftonePass)
+
+const chromaPass = new ShaderPass(ChromaShader)
+composer.addPass(chromaPass)
+
+const selectivePass = new SelectiveCubeCompositePass(cleanSavePass.renderTarget.texture, cubeMask.texture)
+selectivePass.setSelective(true)
+composer.addPass(selectivePass)
+
+const asciiPass = new AsciiPass({ amount: 0, cellSize: 10 })
+asciiPass.setMaskTexture(cubeMask.texture)
+composer.addPass(asciiPass)
+
+const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
+bloomPass.setMaskTexture(cubeMask.texture)
+composer.addPass(bloomPass)
+
+const glarePass = new GlarePass({ strength: 0.35, threshold: 0.7, stretch: 1.55, angle: 0.08 })
+glarePass.setMaskTexture(cubeMask.texture)
+composer.addPass(glarePass)
+
+const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
+flarePass.setMaskTexture(cubeMask.texture)
+composer.addPass(flarePass)
+
 const dofPass = new DepthOfFieldPass(scene, camera, {
   focus: 4.8,
   aperture: 0.00022,
@@ -213,33 +252,10 @@ const dofPass = new DepthOfFieldPass(scene, camera, {
 dofPass.enabled = false
 composer.addPass(dofPass)
 
-const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
-composer.addPass(bloomPass)
+const filmGradePass = new ShaderPass(FilmGradeShader)
+composer.addPass(filmGradePass)
 
-const glarePass = new GlarePass({ strength: 0.35, threshold: 0.7, stretch: 1.55, angle: 0.08 })
-composer.addPass(glarePass)
-
-const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
-composer.addPass(flarePass)
-
-const afterimagePass = new AfterimageStylePass(0)
-composer.addPass(afterimagePass)
-
-const cinematicPass = new ShaderPass(CinematicPrismShader)
-composer.addPass(cinematicPass)
-
-const halftonePass = new HalftoneStylePass({ amount: 0, radius: 3.4, shape: 1 })
-composer.addPass(halftonePass)
-
-const selectivePass = new SelectiveCubeCompositePass(cleanSavePass.renderTarget.texture, cubeMask.texture)
-selectivePass.setSelective(true)
-composer.addPass(selectivePass)
-
-// ASCII after selective mix: whole glyphs only on cube cells, streetwear stays clean.
-const asciiPass = new AsciiPass({ amount: 0, cellSize: 10 })
-asciiPass.setMaskTexture(cubeMask.texture)
-composer.addPass(asciiPass)
-
+// Keep filmGradePass as the sole film-grade pass (vignette + grain).
 composer.addPass(new OutputPass())
 composer.setSize(window.innerWidth, window.innerHeight)
 
@@ -289,7 +305,9 @@ async function boot() {
     afterimagePass,
     halftonePass,
     asciiPass,
-    cinematicPass,
+    chromaPass,
+    filmGradePass,
+    cinematicPass: filmGradePass,
     LOOK_PRESETS,
     exportRender,
     applyUi,
@@ -330,6 +348,9 @@ async function boot() {
       selectivePass.setMaskTexture(cubeMask.texture)
       selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
       asciiPass.setMaskTexture(cubeMask.texture)
+      bloomPass.setMaskTexture(cubeMask.texture)
+      glarePass.setMaskTexture(cubeMask.texture)
+      flarePass.setMaskTexture(cubeMask.texture)
       asciiPass.setSize(width, height)
       composer.render()
       const dataURL = canvas.toDataURL('image/png')
@@ -465,10 +486,14 @@ function applyUi() {
   asciiPass.setMaskTexture(cubeMask.texture)
   asciiPass.enabled = values.ascii > 0.01
 
-  cinematicPass.uniforms.intensity.value = values.chroma
-  cinematicPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
-  cinematicPass.uniforms.vignette.value = values.vignette
-  cinematicPass.uniforms.grain.value = values.grain * 0.014
+  bloomPass.setMaskTexture(cubeMask.texture)
+  glarePass.setMaskTexture(cubeMask.texture)
+  flarePass.setMaskTexture(cubeMask.texture)
+
+  chromaPass.uniforms.intensity.value = values.chroma
+  chromaPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
+  filmGradePass.uniforms.vignette.value = values.vignette
+  filmGradePass.uniforms.grain.value = values.grain * 0.014
 
   renderer.toneMappingExposure = values.exposure
   renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
@@ -627,18 +652,21 @@ function animate(now) {
   if (document.hidden || exportInProgress) return
   if (autoSpin) prism.rotation.y += delta * 0.035
 
-  cinematicPass.uniforms.time.value = now * 0.001
+  filmGradePass.uniforms.time.value = now * 0.001
   // Slow anamorphic rotation for living glare
   glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
   caustics.userData.update(now * 0.001)
   streetwear.userData.update(now * 0.001)
   controls.update()
 
-  // Mask first so selective composite can keep the streetwear wall clean.
+  // Mask first so selective composite / optical extracts stay cube-sourced.
   cubeMask.renderMask(renderer, scene, camera, [streetwear])
   selectivePass.setMaskTexture(cubeMask.texture)
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   asciiPass.setMaskTexture(cubeMask.texture)
+  bloomPass.setMaskTexture(cubeMask.texture)
+  glarePass.setMaskTexture(cubeMask.texture)
+  flarePass.setMaskTexture(cubeMask.texture)
   composer.render()
 
   // Moving average frame time for Phase 0 / Phase 5 instrumentation
@@ -679,6 +707,9 @@ async function exportRender(scale = 2) {
     selectivePass.setMaskTexture(cubeMask.texture)
     selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
     asciiPass.setMaskTexture(cubeMask.texture)
+    bloomPass.setMaskTexture(cubeMask.texture)
+    glarePass.setMaskTexture(cubeMask.texture)
+    flarePass.setMaskTexture(cubeMask.texture)
     asciiPass.setSize(width, height)
     composer.render()
 

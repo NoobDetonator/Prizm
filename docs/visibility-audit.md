@@ -18,3 +18,10 @@ Look `studio`, locked camera. Hide one mesh at a time; MAD < **0.05** ⇒ dead.
 | `streetwear-backdrop` (21c8f49b) | 26.3622 | yes |
 
 Dead objects: **2** / 12
+
+## Notes
+
+- `surface-details` (points + scratches) fall under the threshold at look \`studio\`
+  (\`speckle=0.28\`). At \`speckle=1\` MAD ≈ **0.125** — intensity-gated, not dead code.
+- The opaque black wash slab behind streetwear was removed (MAD ≈ 0 against black bg).
+- No remaining always-invisible meshes after T1.1–T1.4.

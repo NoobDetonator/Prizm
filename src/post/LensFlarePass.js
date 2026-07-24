@@ -31,6 +31,8 @@ export class LensFlarePass extends Pass {
 
     this._extract = makeMaterial(FRAG_EXTRACT, {
       tDiffuse: { value: null },
+      tMask: { value: null },
+      maskEnabled: { value: 0 },
       threshold: { value: threshold },
     })
 
@@ -66,6 +68,11 @@ export class LensFlarePass extends Pass {
   setHaloWidth(value) {
     this.haloWidth = value
     this._flare.uniforms.haloWidth.value = value
+  }
+
+  setMaskTexture(texture) {
+    this._extract.uniforms.tMask.value = texture
+    this._extract.uniforms.maskEnabled.value = texture ? 1 : 0
   }
 
   setSize(width, height) {
@@ -163,6 +170,8 @@ const VERT = /* glsl */ `
 
 const FRAG_EXTRACT = /* glsl */ `
   uniform sampler2D tDiffuse;
+  uniform sampler2D tMask;
+  uniform float maskEnabled;
   uniform float threshold;
   varying vec2 vUv;
 
@@ -173,7 +182,9 @@ const FRAG_EXTRACT = /* glsl */ `
   void main() {
     vec3 color = texture2D(tDiffuse, vUv).rgb;
     float b = luma(color);
-    float mask = smoothstep(threshold, threshold + 0.35, b);
+    float brightMask = smoothstep(threshold, threshold + 0.35, b);
+    float objectMask = mix(1.0, texture2D(tMask, vUv).r, maskEnabled);
+    float mask = brightMask * objectMask;
     gl_FragColor = vec4(color * mask, mask);
   }
 `
