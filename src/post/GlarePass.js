@@ -31,6 +31,8 @@ export class GlarePass extends Pass {
 
     this._extract = makeMaterial(FRAG_EXTRACT, {
       tDiffuse: { value: null },
+      tMask: { value: null },
+      maskEnabled: { value: 0 },
       threshold: { value: threshold },
       softKnee: { value: 0.45 },
     })
@@ -73,6 +75,11 @@ export class GlarePass extends Pass {
 
   setAngle(radians) {
     this.angle = radians
+  }
+
+  setMaskTexture(texture) {
+    this._extract.uniforms.tMask.value = texture
+    this._extract.uniforms.maskEnabled.value = texture ? 1 : 0
   }
 
   setSize(width, height) {
@@ -199,6 +206,8 @@ const VERT = /* glsl */ `
 
 const FRAG_EXTRACT = /* glsl */ `
   uniform sampler2D tDiffuse;
+  uniform sampler2D tMask;
+  uniform float maskEnabled;
   uniform float threshold;
   uniform float softKnee;
   varying vec2 vUv;
@@ -214,7 +223,8 @@ const FRAG_EXTRACT = /* glsl */ `
     float soft = clamp(brightness - threshold + knee, 0.0, 2.0 * knee);
     soft = (soft * soft) / (4.0 * knee);
     float contribution = max(soft, brightness - threshold) / max(brightness, 1e-4);
-    gl_FragColor = vec4(color * contribution, 1.0);
+    float mask = mix(1.0, texture2D(tMask, vUv).r, maskEnabled);
+    gl_FragColor = vec4(color * contribution * mask, 1.0);
   }
 `
 

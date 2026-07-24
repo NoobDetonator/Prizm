@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Instrument+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/src/styles-v2.css" />
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <div id="app">
@@ -129,6 +129,18 @@
 
         <p class="panel-section">Render</p>
         <label>
+          <span class="row">Env intensity <em data-value="env-intensity">2.50</em></span>
+          <input id="env-intensity" type="range" min="0.5" max="6" step="0.05" value="2.5" />
+        </label>
+        <label class="preset-field">
+          <span class="row">Environment</span>
+          <select id="env-source">
+            <option value="procedural">Procedural (float HDR)</option>
+            <option value="reference" selected>Artistic image</option>
+            <option value="hdr">External .hdr (drop later)</option>
+          </select>
+        </label>
+        <label>
           <span class="row">Exposure <em data-value="exposure">1.08</em></span>
           <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.08" />
         </label>
@@ -150,11 +162,11 @@
           </select>
         </label>
 
-        <button id="download-texture" type="button">Exportar render 2×</button>
+        <button id="export-render" type="button">Exportar render 2×</button>
       </aside>
 
       <footer class="hint">arraste para orbitar · scroll para zoom · FX só no cubo · texto refrata atrás</footer>
     </div>
-    <script type="module" src="/src/prizmApp.js"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,16 +1,16 @@
-export const CinematicPrismShader = {
-  name: 'CinematicPrismShader',
+/**
+ * Full-frame film grade — vignette + grain (after selective mix).
+ */
+export const FilmGradeShader = {
+  name: 'FilmGradeShader',
   uniforms: {
     tDiffuse: { value: null },
-    amount: { value: 0.00135 },
-    intensity: { value: 0.7 },
     vignette: { value: 0.26 },
     grain: { value: 0.004 },
     time: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
-
     void main() {
       vUv = uv;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -18,8 +18,6 @@ export const CinematicPrismShader = {
   `,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float amount;
-    uniform float intensity;
     uniform float vignette;
     uniform float grain;
     uniform float time;
@@ -32,27 +30,16 @@ export const CinematicPrismShader = {
     }
 
     void main() {
+      vec3 color = texture2D(tDiffuse, vUv).rgb;
       vec2 centered = vUv - 0.5;
       float dist = length(centered);
-      vec2 direction = centered / max(dist, 0.0001);
-      vec2 offset = direction * amount * (0.35 + dist * 1.85);
-
-      vec3 source = texture2D(tDiffuse, vUv).rgb;
-      float red = texture2D(tDiffuse, vUv + offset).r;
-      float blue = texture2D(tDiffuse, vUv - offset).b;
-      vec3 split = vec3(red, source.g, blue);
-
-      float peak = max(source.r, max(source.g, source.b));
-      float highlightMask = smoothstep(0.34, 1.4, peak);
-      float edgeMask = smoothstep(0.12, 0.72, dist);
-      float chromaMask = clamp(highlightMask * 0.82 + edgeMask * 0.18, 0.0, 1.0);
-      vec3 color = mix(source, split, chromaMask * intensity);
 
       float vignetteMask = smoothstep(0.26, 0.72, dist);
       color *= 1.0 - vignetteMask * vignette;
 
+      float peak = max(color.r, max(color.g, color.b));
       float noise = hash(gl_FragCoord.xy + vec2(time * 71.0, time * 43.0)) - 0.5;
-      color += noise * grain * (0.25 + highlightMask * 0.75);
+      color += noise * grain * (0.35 + peak * 0.65);
 
       gl_FragColor = vec4(color, 1.0);
     }

@@ -34,6 +34,8 @@ export class QualityBloomPass extends Pass {
 
     this.brightMaterial = makeMaterial(FRAG_BRIGHT, {
       tDiffuse: { value: null },
+      tMask: { value: null },
+      maskEnabled: { value: 0 },
       threshold: { value: threshold },
       softKnee: { value: this.softKnee },
     })
@@ -79,6 +81,12 @@ export class QualityBloomPass extends Pass {
     const offset = 0.6 + value * 1.4
     this.downMaterial.uniforms.offset.value = offset
     this.upMaterial.uniforms.offset.value = offset
+  }
+
+  /** Limit bright extract to the cube mask; bloom still composites full-frame. */
+  setMaskTexture(texture) {
+    this.brightMaterial.uniforms.tMask.value = texture
+    this.brightMaterial.uniforms.maskEnabled.value = texture ? 1 : 0
   }
 
   setSize(width, height) {
@@ -201,6 +209,8 @@ const VERT = /* glsl */ `
 
 const FRAG_BRIGHT = /* glsl */ `
   uniform sampler2D tDiffuse;
+  uniform sampler2D tMask;
+  uniform float maskEnabled;
   uniform float threshold;
   uniform float softKnee;
   varying vec2 vUv;
@@ -216,7 +226,8 @@ const FRAG_BRIGHT = /* glsl */ `
     float soft = clamp(brightness - threshold + knee, 0.0, 2.0 * knee);
     soft = (soft * soft) / (4.0 * knee);
     float contribution = max(soft, brightness - threshold) / max(brightness, 1e-4);
-    gl_FragColor = vec4(color * contribution, 1.0);
+    float mask = mix(1.0, texture2D(tMask, vUv).r, maskEnabled);
+    gl_FragColor = vec4(color * contribution * mask, 1.0);
   }
 `
 

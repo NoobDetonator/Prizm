@@ -2,8 +2,9 @@ import * as THREE from 'three'
 
 /**
  * Oversized streetwear type wall behind the prism.
- * Lives in the scene so MeshPhysicalMaterial transmission
- * actually refracts it (Snell / dispersion bend what sits behind glass).
+ * All layers are OPAQUE so they enter Three's transmission render target
+ * and actually refract through MeshPhysicalMaterial glass.
+ * Relative “opacity” is painted into the canvas (globalAlpha), not the material.
  */
 export function createStreetwearBackdrop() {
   const group = new THREE.Group()
@@ -14,7 +15,7 @@ export function createStreetwearBackdrop() {
       lines: ['PRIZM', 'SPLIT THE LIGHT', 'NO FILTER', 'REFRACT', 'SS26'],
       size: [16, 11],
       position: [0, 0, -2.85],
-      opacity: 1,
+      paintAlpha: 1,
       speedY: 0.045,
       speedX: 0.012,
       scale: 1,
@@ -23,7 +24,7 @@ export function createStreetwearBackdrop() {
       lines: ['OPTICAL CHAOS', 'BEND REALITY', 'CRYSTAL CORE', 'VOID / GLASS'],
       size: [18, 9],
       position: [0.35, 0.15, -3.55],
-      opacity: 0.62,
+      paintAlpha: 0.62,
       speedY: -0.028,
       speedX: -0.018,
       scale: 1.08,
@@ -32,7 +33,7 @@ export function createStreetwearBackdrop() {
       lines: ['RAW OPTICS', 'LIGHT ENTERS', 'COLOR LEAVES', 'NO CAP'],
       size: [20, 10],
       position: [-0.2, -0.1, -4.05],
-      opacity: 0.28,
+      paintAlpha: 0.28,
       speedY: 0.02,
       speedX: 0.03,
       scale: 1.15,
@@ -41,16 +42,20 @@ export function createStreetwearBackdrop() {
 
   const meshes = []
 
-  for (const layer of layers) {
-    const { texture, canvas } = paintStreetwearTexture(layer.lines, 2048, 1280)
+  // Farthest first so opaque depth writes compose correctly
+  const ordered = [...layers].sort((a, b) => a.position[2] - b.position[2])
+
+  for (const layer of ordered) {
+    const { texture, canvas } = paintStreetwearTexture(layer.lines, 2048, 1280, layer.paintAlpha)
     texture.wrapS = THREE.RepeatWrapping
     texture.wrapT = THREE.RepeatWrapping
     const geo = new THREE.PlaneGeometry(layer.size[0], layer.size[1])
     const mat = new THREE.MeshBasicMaterial({
       map: texture,
-      transparent: layer.opacity < 0.99,
-      opacity: layer.opacity,
-      depthWrite: layer.opacity >= 0.99,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
       side: THREE.FrontSide,
       toneMapped: false,
     })
@@ -66,20 +71,6 @@ export function createStreetwearBackdrop() {
     meshes.push(mesh)
   }
 
-  // Soft luminous slab so the glass has something bright to bend
-  const wash = new THREE.Mesh(
-    new THREE.PlaneGeometry(22, 14),
-    new THREE.MeshBasicMaterial({
-      color: '#05070c',
-      transparent: true,
-      opacity: 0.92,
-      depthWrite: false,
-      toneMapped: false,
-    }),
-  )
-  wash.position.z = -4.55
-  group.add(wash)
-
   group.userData.update = (time) => {
     for (const mesh of meshes) {
       const map = mesh.material.map
@@ -92,14 +83,18 @@ export function createStreetwearBackdrop() {
   return group
 }
 
-function paintStreetwearTexture(lines, width, height) {
+function paintStreetwearTexture(lines, width, height, alpha = 1) {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
 
+  // Always opaque base so the material can stay non-transparent
   ctx.fillStyle = '#050505'
   ctx.fillRect(0, 0, width, height)
+
+  ctx.save()
+  ctx.globalAlpha = alpha
 
   // Faint grid / poster texture
   ctx.strokeStyle = 'rgba(255,255,255,0.04)'
@@ -129,7 +124,6 @@ function paintStreetwearTexture(lines, width, height) {
     const metrics = ctx.measureText(text)
     const x = (i % 2 === 0 ? 48 : width - metrics.width - 48) + Math.sin(i * 1.7) * 20
 
-    // Outline punch for streetwear poster feel
     if (huge) {
       ctx.strokeStyle = 'rgba(0,0,0,0.65)'
       ctx.lineWidth = 10
@@ -137,7 +131,6 @@ function paintStreetwearTexture(lines, width, height) {
     }
     ctx.fillText(text, x, y)
 
-    // Accent slash marks
     if (huge) {
       ctx.fillStyle = '#ff4d1f'
       ctx.fillRect(x, y + size + 8, Math.min(220, metrics.width * 0.35), 6)
@@ -146,12 +139,13 @@ function paintStreetwearTexture(lines, width, height) {
     y += size + (huge ? 36 : 28)
   })
 
-  // Corner stamp
   ctx.font = '600 28px "Instrument Sans", sans-serif'
   ctx.fillStyle = 'rgba(126,200,255,0.75)'
   ctx.fillText('PRIZM / OPTICS DEPT.', 48, height - 56)
   ctx.fillStyle = 'rgba(244,241,234,0.35)'
   ctx.fillText('LIGHT ENTERS · COLOR LEAVES', width - 520, height - 56)
+
+  ctx.restore()
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace

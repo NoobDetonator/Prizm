@@ -1,17 +1,16 @@
 import * as THREE from 'three'
 
 /**
- * Rear-facing optical shell rendered before the transmissive front surface.
+ * Art-directed interior rim glow drawn *over* the transmissive front glass.
  *
- * Schlick Fresnel approximation:
- *   F0 = ((n1 - n2) / (n1 + n2))^2
- *   F  = F0 + (1 - F0) * (1 - cos(theta))^5
+ * NOT a physical Beer–Lambert volume path. With AdditiveBlending + transparent
+ * the shell leaves the opaque queue, so it never enters Three's transmission
+ * render target. We intentionally draw it after the glass (renderOrder 3,
+ * depthTest false) as a fresnel edge highlight — fake, readable, reusable.
  *
- * Beer-Lambert attenuation:
- *   T = exp(-absorption * opticalPathLength)
- *
- * This is an art-directed real-time approximation: it reveals the far edges
- * through the glass while leaving face-on areas almost completely clear.
+ * Schlick Fresnel (for the edge falloff only):
+ *   F0 = ((n - 1) / (n + 1))^2
+ *   F  = F0 + (1 - F0) * (1 - cosθ)^5
  */
 export function createGlassInteriorRimMaterial() {
   return new THREE.ShaderMaterial({
@@ -57,6 +56,7 @@ export function createGlassInteriorRimMaterial() {
         float f0 = eta * eta;
         float fresnel = f0 + (1.0 - f0) * pow(1.0 - cosTheta, 5.0);
 
+        // Soft path-length cue for spectral tint only — not a real volume integral.
         float opticalPath = thickness / max(cosTheta, 0.18);
         vec3 transmittance = exp(-absorption * opticalPath);
 
@@ -67,13 +67,14 @@ export function createGlassInteriorRimMaterial() {
         float averageTransmission = dot(transmittance, vec3(0.333333));
         float alpha = rearEdge * intensity * mix(0.68, 1.0, averageTransmission);
 
-        gl_FragColor = vec4(color * (0.78 + fresnel * 0.72) * alpha, 1.0);
+        // Do NOT premultiply into A=1 — AdditiveBlending needs a real alpha.
+        gl_FragColor = vec4(color * (0.78 + fresnel * 0.72), alpha);
       }
     `,
-    transparent: false,
+    transparent: true,
     depthWrite: false,
-    depthTest: true,
-    blending: THREE.NormalBlending,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
     side: THREE.BackSide,
     toneMapped: false,
   })

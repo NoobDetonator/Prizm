@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prizm lib — physical engine</title>
+    <style>
+      html, body, canvas { margin: 0; width: 100%; height: 100%; background: #000; display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script type="module">
+      import * as THREE from 'three'
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+      import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+      import { createPrism, createPrismEnvironment } from '../src/lib/prizm/index.js'
+
+      // MeshPhysicalMaterial.transmission — no beforeRender capture required.
+      const canvas = document.querySelector('#c')
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
+      renderer.setSize(innerWidth, innerHeight)
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.outputColorSpace = THREE.SRGBColorSpace
+
+      const scene = new THREE.Scene()
+      scene.background = new THREE.Color('#000')
+      scene.environment = createPrismEnvironment(renderer)
+      scene.environmentIntensity = 2.5
+
+      const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100)
+      camera.position.set(2.4, 1.6, 3.4)
+      const controls = new OrbitControls(camera, canvas)
+      controls.enableDamping = true
+
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(12, 8),
+        new THREE.MeshBasicMaterial({ color: '#e8eef8' }),
+      )
+      wall.position.z = -3
+      scene.add(wall)
+      scene.add(new THREE.DirectionalLight('#fff', 2).translateX(3).translateY(4))
+
+      const mesh = new THREE.Mesh(new RoundedBoxGeometry(1.8, 1.6, 1.7, 8, 0.1))
+      scene.add(mesh)
+
+      const prism = createPrism({ renderer, preset: 'crystal', engine: 'physical' })
+      prism.attach(mesh)
+
+      addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight
+        camera.updateProjectionMatrix()
+        renderer.setSize(innerWidth, innerHeight)
+      })
+
+      const t0 = performance.now()
+      ;(function frame(now) {
+        requestAnimationFrame(frame)
+        prism.update((now - t0) * 0.001)
+        mesh.rotation.y += 0.004
+        controls.update()
+        renderer.render(scene, camera)
+      })(t0)
+    </script>
+  </body>
+</html>
