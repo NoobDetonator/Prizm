@@ -93,12 +93,15 @@ panelToggle.setAttribute('aria-expanded', 'false')
 document.querySelector('#app').append(panelToggle)
 
 let maxDprCap = Number(ui.dpr.value) || 2
+let adaptiveDprFloor = 1
+let slowFrameStreak = 0
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: false,
   alpha: false,
   stencil: false,
-  preserveDrawingBuffer: true,
+  // Export captures in the same task after composer.render() — no need to preserve every frame.
+  preserveDrawingBuffer: false,
   powerPreference: 'high-performance',
 })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDprCap))
@@ -109,10 +112,13 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 1.08
 renderer.transmissionResolutionScale = 1
 
+const MASK_LAYER = 1
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#000000')
 
 const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.1, 100)
+camera.layers.enable(0)
+camera.layers.enable(MASK_LAYER)
 camera.position.set(2.55, 1.75, 3.75)
 camera.position.multiplyScalar(1 + Math.max(0, 1.05 - camera.aspect) * 0.9)
 
@@ -171,6 +177,7 @@ prism.name = 'hero-prism'
 prism.add(caustics, interiorRim, cubeFront, surfaceDetails, rim)
 prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
+prism.traverse((obj) => obj.layers.enable(MASK_LAYER))
 scene.add(prism)
 
 const streetwear = createStreetwearBackdrop()
@@ -219,7 +226,7 @@ composer.addPass(new RenderPass(scene, camera))
 const cleanSavePass = new SavePass()
 composer.addPass(cleanSavePass)
 
-const cubeMask = createCubeMaskRenderer({ halfRes: true, samples: 4 })
+const cubeMask = createCubeMaskRenderer({ halfRes: true, samples: 4, maskLayer: MASK_LAYER })
 cubeMask.setSize(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio())
 
 const afterimagePass = new AfterimageStylePass(0)
@@ -351,7 +358,7 @@ async function boot() {
       composer.setPixelRatio(1)
       composer.setSize(width, height)
       cubeMask.setSize(width, height)
-      cubeMask.renderMask(renderer, scene, camera, [streetwear])
+      cubeMask.renderMask(renderer, scene, camera)
       selectivePass.setMaskTexture(cubeMask.texture)
       selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
       asciiPass.setMaskTexture(cubeMask.texture)
@@ -386,7 +393,7 @@ async function boot() {
     sampleRenderStats() {
       renderer.info.autoReset = false
       renderer.info.reset()
-      cubeMask.renderMask(renderer, scene, camera, [streetwear])
+      cubeMask.renderMask(renderer, scene, camera)
       composer.render()
       const snapshot = {
         calls: renderer.info.render.calls,
@@ -514,6 +521,7 @@ function applyUi() {
   bloomPass.setStrength(values.bloom * 1.15)
   bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, Math.min(values.bloom, 1.5) / 1.5))
   bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, Math.min(values.bloom, 1.5) / 1.5))
+  bloomPass.enabled = values.bloom > 0.01
   rimMaterial.uniforms.intensity.value = 0.36 + values.bloom * 0.4 + values.dispersion * 0.065
 
   glarePass.setStrength(values.glare)
@@ -527,8 +535,10 @@ function applyUi() {
   dofPass.setStrength(values.dof)
 
   afterimagePass.setAmount(values.afterimage)
+  afterimagePass.enabled = values.afterimage > 0.01
   halftonePass.setAmount(values.halftone)
   halftonePass.setRadius(2.4 + values.halftone * 2.8)
+  // HalftoneStylePass.setAmount already toggles enabled
 
   asciiPass.setAmount(values.ascii)
   asciiPass.setCellSize(values.asciiCell)
@@ -542,8 +552,10 @@ function applyUi() {
 
   chromaPass.uniforms.intensity.value = values.chroma
   chromaPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
+  chromaPass.enabled = values.chroma > 0.01
   filmGradePass.uniforms.vignette.value = values.vignette
   filmGradePass.uniforms.grain.value = values.grain * 0.014
+  filmGradePass.enabled = values.vignette > 0.01 || values.grain > 0.01
 
   renderer.toneMappingExposure = values.exposure
   renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
@@ -718,7 +730,7 @@ function animate(now) {
   controls.update()
 
   // Mask first so selective composite / optical extracts stay cube-sourced.
-  cubeMask.renderMask(renderer, scene, camera, [streetwear])
+  cubeMask.renderMask(renderer, scene, camera)
   selectivePass.setMaskTexture(cubeMask.texture)
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   asciiPass.setMaskTexture(cubeMask.texture)
@@ -738,6 +750,21 @@ function animate(now) {
     window.__prizm.stats.fps = avg > 0 ? 1000 / avg : 0
     window.__prizm.stats.calls = renderer.info.render.calls
     window.__prizm.stats.triangles = renderer.info.render.triangles
+
+    // Adaptive DPR: if sustained >22ms for 90 frames, step down 0.25 toward 1.0
+    if (samples.length >= 60 && avg > 22) {
+      slowFrameStreak += 1
+    } else {
+      slowFrameStreak = 0
+    }
+    if (slowFrameStreak >= 90 && maxDprCap > adaptiveDprFloor) {
+      maxDprCap = Math.max(adaptiveDprFloor, Number((maxDprCap - 0.25).toFixed(2)))
+      ui.dpr.value = String(maxDprCap)
+      setValueLabel('dpr', maxDprCap.toFixed(2))
+      slowFrameStreak = 0
+      console.info(`[prizm] adaptive DPR → ${maxDprCap}`)
+      onResize()
+    }
   }
 }
 
@@ -761,7 +788,7 @@ async function exportRender(scale = 2) {
     composer.setPixelRatio(1)
     composer.setSize(width, height)
     cubeMask.setSize(width, height)
-    cubeMask.renderMask(renderer, scene, camera, [streetwear])
+    cubeMask.renderMask(renderer, scene, camera)
     selectivePass.setMaskTexture(cubeMask.texture)
     selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
     asciiPass.setMaskTexture(cubeMask.texture)
