@@ -106,7 +106,8 @@ let slowFrameStreak = 0
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: false,
-  alpha: false,
+  // Alpha enabled so void looks can clear to transparent while keeping IBL on the crystal.
+  alpha: true,
   stencil: false,
   // Export captures in the same task after composer.render() — no need to preserve every frame.
   preserveDrawingBuffer: false,
@@ -123,6 +124,7 @@ renderer.transmissionResolutionScale = 1
 const MASK_LAYER = 1
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#000000')
+let voidMode = false
 
 const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.1, 100)
 camera.layers.enable(0)
@@ -206,7 +208,10 @@ const warmRim = new THREE.DirectionalLight('#ff6434', 1.25)
 warmRim.position.set(4, -1.5, -2.5)
 scene.add(warmRim)
 
-scene.add(new THREE.AmbientLight('#10223a', 0.28))
+const ambientFill = new THREE.AmbientLight('#10223a', 0.28)
+scene.add(ambientFill)
+const studioLights = [keyLight, coolRim, warmRim, ambientFill]
+const studioLightBase = studioLights.map((l) => l.intensity)
 
 const composerTarget = new THREE.WebGLRenderTarget(1, 1, {
   type: THREE.HalfFloatType,
@@ -220,7 +225,8 @@ composerTarget.samples = Math.min(4, renderer.capabilities.maxSamples || 4)
 const composer = new EffectComposer(renderer, composerTarget)
 composer.setPixelRatio(renderer.getPixelRatio())
 composer.setSize(window.innerWidth, window.innerHeight)
-composer.addPass(new RenderPass(scene, camera))
+const renderPass = new RenderPass(scene, camera)
+composer.addPass(renderPass)
 
 /*
  * Post pipeline (why this order):
@@ -337,14 +343,23 @@ async function boot() {
     exportRender,
     applyUi,
     readUi,
-    applyLook(key) {
+    async applyLook(key) {
       if (!applyLookPreset(ui, key)) return false
       if (ui.look) ui.look.value = key
       if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
         ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
       }
+      const look = LOOK_PRESETS[key]
+      setVoidMode(Boolean(look?.voidMode))
+      if (look?.values?.envSource) {
+        await switchEnvironment(look.values.envSource)
+      }
       applyUi()
       return true
+    },
+    setVoidMode,
+    get voidMode() {
+      return voidMode
     },
     async setEnvironment(kind) {
       if (ui.envSource) ui.envSource.value = kind
@@ -482,6 +497,35 @@ async function boot() {
     },
   }
 
+}
+
+/**
+ * Transparent void: no streetwear plate, clear alpha 0, IBL still lights the crystal.
+ * Studio lights are dimmed so absurd env slits dominate the reflections.
+ */
+function setVoidMode(enabled) {
+  voidMode = Boolean(enabled)
+  document.querySelector('#app')?.classList.toggle('is-void', voidMode)
+
+  if (voidMode) {
+    scene.background = null
+    renderer.setClearColor(0x000000, 0)
+    renderPass.clearAlpha = 0
+    streetwear.visible = false
+    studioLights.forEach((light, i) => {
+      light.intensity = studioLightBase[i] * 0.08
+    })
+    document.querySelector('.tag').textContent = 'void refraction · transparent plate · cube IBL'
+  } else {
+    scene.background = new THREE.Color('#000000')
+    renderer.setClearColor('#000000', 1)
+    renderPass.clearAlpha = 1
+    streetwear.visible = true
+    studioLights.forEach((light, i) => {
+      light.intensity = studioLightBase[i]
+    })
+    document.querySelector('.tag').textContent = 'streetwear refraction / cube-only post FX'
+  }
 }
 
 function syncEnvNote(kind) {
@@ -629,8 +673,13 @@ function applyUi() {
   presetKey = values.preset
 
   applyPhysicalParams(material, { ...values, presetKey })
+  if (voidMode) {
+    // Let absurd IBL slits dominate; streetwear transmission is gone in void.
+    material.envMapIntensity *= 1.22
+    material.clearcoatRoughness = 0.008
+  }
   applyGlassInteriorRimParams(interiorRimMaterial, values)
-  surfaceDetails.userData.setIntensity(values.speckle)
+  surfaceDetails.userData.setIntensity(voidMode ? values.speckle * 0.35 : values.speckle)
   caustics.userData.setIntensity(values.caustics)
 
   bloomPass.setStrength(values.bloom * 1.15)
@@ -729,11 +778,18 @@ function bindUi() {
     applyUi()
   })
 
-  ui.look.addEventListener('change', (event) => {
+  ui.look.addEventListener('change', async (event) => {
     stop(event)
     applyLookPreset(ui, ui.look.value)
     if (ui.note && MATERIAL_PRESETS[ui.preset.value]) {
       ui.note.textContent = MATERIAL_PRESETS[ui.preset.value].note
+    }
+    const look = LOOK_PRESETS[ui.look.value]
+    setVoidMode(Boolean(look?.voidMode))
+    if (look?.values?.envSource) {
+      await switchEnvironment(look.values.envSource)
+    } else if (!look?.voidMode && voidMode) {
+      setVoidMode(false)
     }
     applyUi()
   })

@@ -29,6 +29,23 @@ body,
   isolation: isolate;
 }
 
+/* Checkerboard behind the WebGL canvas so transparent void is obvious */
+#app.is-void {
+  background-color: #12151a;
+  background-image:
+    linear-gradient(45deg, #1b2028 25%, transparent 25%),
+    linear-gradient(-45deg, #1b2028 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1b2028 75%),
+    linear-gradient(-45deg, transparent 75%, #1b2028 75%);
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0;
+}
+
+#app.is-void .hud {
+  mix-blend-mode: normal;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.65);
+}
+
 #canvas {
   position: absolute;
   inset: 0;

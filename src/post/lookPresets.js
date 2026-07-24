@@ -213,6 +213,40 @@ export const LOOK_PRESETS = {
       tonemap: 'aces',
     },
   },
+  voidPrism: {
+    label: 'Void prism',
+    note: 'transparent void · absurd liquid reflections',
+    voidMode: true,
+    values: {
+      preset: 'crystal',
+      dispersion: 2.35,
+      thickness: 2.1,
+      ior: 1.95,
+      roughness: 0.008,
+      translucency: 0.03,
+      speckle: 0.08,
+      // Bloom kept in check — hot slits should glint, not flood the frame
+      bloom: 0.36,
+      glare: 0.14,
+      flare: 0.05,
+      dof: 0,
+      dofFocus: 4.8,
+      ascii: 0,
+      asciiCell: 10,
+      halftone: 0,
+      afterimage: 0,
+      caustics: 0.4,
+      chroma: 1.1,
+      vignette: 0,
+      grain: 0.12,
+      exposure: 0.92,
+      envIntensity: 2.35,
+      envSource: 'proc:liquidVoid',
+      dpr: 2,
+      transmissionScale: 1,
+      tonemap: 'aces',
+    },
+  },
 }
 
 /** Maps look-preset value keys → UI element ids / property names on the ui object. */
@@ -262,5 +296,9 @@ export function applyLookPreset(ui, key) {
   }
 
   if (ui.lookNote) ui.lookNote.textContent = look.note
+  // Optional: look can force an environment plate
+  if (look.values.envSource && ui.envSource) {
+    ui.envSource.value = look.values.envSource
+  }
   return true
 }
