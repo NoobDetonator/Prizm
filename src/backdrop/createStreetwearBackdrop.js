@@ -71,21 +71,6 @@ export function createStreetwearBackdrop() {
     meshes.push(mesh)
   }
 
-  // Opaque dark wash — black-on-black, kept as solid so transmission has a floor
-  const wash = new THREE.Mesh(
-    new THREE.PlaneGeometry(22, 14),
-    new THREE.MeshBasicMaterial({
-      color: '#05070c',
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      depthTest: true,
-      toneMapped: false,
-    }),
-  )
-  wash.position.z = -4.55
-  group.add(wash)
-
   group.userData.update = (time) => {
     for (const mesh of meshes) {
       const map = mesh.material.map
