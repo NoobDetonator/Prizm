@@ -37,7 +37,6 @@ export const MATERIAL_PRESETS = {
 }
 
 const MILKY_TINT = new THREE.Color('#b8d4f5')
-const BACK_TINT = new THREE.Color('#abcfff')
 
 export function createPhysicalGlassMaterial(textures, presetKey = 'crystal') {
   const preset = MATERIAL_PRESETS[presetKey] ?? MATERIAL_PRESETS.crystal
@@ -74,25 +73,6 @@ export function createPhysicalGlassMaterial(textures, presetKey = 'crystal') {
   return material
 }
 
-export function createGlassBackMaterial(frontMaterial) {
-  return new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#f4f8ff'),
-    metalness: 0,
-    roughness: Math.min(1, frontMaterial.roughness + 0.025),
-    transmission: 0,
-    transparent: true,
-    opacity: 0.14,
-    ior: frontMaterial.ior,
-    thickness: 0,
-    specularIntensity: 1,
-    envMapIntensity: frontMaterial.envMapIntensity * 1.15,
-    clearcoat: 1,
-    clearcoatRoughness: 0.025,
-    side: THREE.BackSide,
-    depthWrite: false,
-  })
-}
-
 export function applyPhysicalParams(material, params) {
   const preset = MATERIAL_PRESETS[params.presetKey] ?? MATERIAL_PRESETS.crystal
   const translucency = THREE.MathUtils.clamp(params.translucency, 0, 1)
@@ -100,6 +80,7 @@ export function applyPhysicalParams(material, params) {
   material.ior = params.ior
   material.dispersion = params.dispersion
   material.thickness = params.thickness
+  // translucency still drives volume look via transmission / attenuation / roughness
   material.transmission = THREE.MathUtils.lerp(preset.transmission, 0.95, translucency)
   material.attenuationDistance = THREE.MathUtils.lerp(
     preset.attenuationDistance * 2.5,
@@ -112,13 +93,4 @@ export function applyPhysicalParams(material, params) {
   const normalStrength = 0.055 + params.speckle * 0.3
   material.normalScale.set(normalStrength, normalStrength)
   material.clearcoatNormalScale.set(normalStrength * 0.35, normalStrength * 0.35)
-}
-
-export function applyBackFaceParams(backMaterial, frontMaterial, translucency) {
-  const amount = THREE.MathUtils.clamp(translucency, 0, 1)
-  backMaterial.opacity = THREE.MathUtils.lerp(0.18, 0.055, amount)
-  backMaterial.roughness = Math.min(1, frontMaterial.roughness + 0.02)
-  backMaterial.ior = frontMaterial.ior
-  backMaterial.envMapIntensity = frontMaterial.envMapIntensity * 1.15
-  backMaterial.color.set('#ffffff').lerp(BACK_TINT, amount * 0.35)
 }

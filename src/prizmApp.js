@@ -26,9 +26,7 @@ import { createPrismRimMaterial } from './materials/prismRimMaterial.js'
 import { applyGlassInteriorRimParams, createGlassInteriorRimMaterial } from './materials/glassInteriorRimMaterial.js'
 import {
   MATERIAL_PRESETS,
-  applyBackFaceParams,
   applyPhysicalParams,
-  createGlassBackMaterial,
   createPhysicalGlassMaterial,
 } from './materials/physicalGlassV2.js'
 
@@ -141,12 +139,8 @@ const geometry = new RoundedBoxGeometry(
 
 let presetKey = ui.preset?.value || 'crystal'
 const material = createPhysicalGlassMaterial(textures, presetKey)
-const backMaterial = createGlassBackMaterial(material)
 const interiorRimMaterial = createGlassInteriorRimMaterial()
 const rimMaterial = createPrismRimMaterial()
-
-const cubeBack = new THREE.Mesh(geometry, backMaterial)
-cubeBack.renderOrder = 1
 
 const interiorRim = new THREE.Mesh(geometry, interiorRimMaterial)
 interiorRim.name = 'glass-interior-rim'
@@ -166,7 +160,7 @@ const caustics = createInternalCaustics()
 
 const prism = new THREE.Group()
 prism.name = 'hero-prism'
-prism.add(cubeBack, caustics, interiorRim, cubeFront, surfaceDetails, rim)
+prism.add(caustics, interiorRim, cubeFront, surfaceDetails, rim)
 prism.rotation.set(0.33, 0.66, 0.085)
 prism.position.set(0, -0.02, 0.08)
 scene.add(prism)
@@ -278,12 +272,10 @@ async function boot() {
     controls,
     prism,
     cubeFront,
-    cubeBack,
     interiorRim,
     rim,
     surfaceDetails,
     material,
-    backMaterial,
     interiorRimMaterial,
     rimMaterial,
     caustics,
@@ -444,7 +436,6 @@ function applyUi() {
   presetKey = values.preset
 
   applyPhysicalParams(material, { ...values, presetKey })
-  applyBackFaceParams(backMaterial, material, values.translucency)
   applyGlassInteriorRimParams(interiorRimMaterial, values)
   surfaceDetails.userData.setIntensity(values.speckle)
   caustics.userData.setIntensity(values.caustics)
