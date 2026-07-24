@@ -151,7 +151,8 @@ cubeBack.renderOrder = 1
 const interiorRim = new THREE.Mesh(geometry, interiorRimMaterial)
 interiorRim.name = 'glass-interior-rim'
 interiorRim.scale.setScalar(0.945)
-interiorRim.renderOrder = 1.5
+// After cubeFront: additive rim is transparent so it must not fight depthWrite glass.
+interiorRim.renderOrder = 3
 
 const cubeFront = new THREE.Mesh(geometry, material)
 cubeFront.renderOrder = 2
@@ -276,6 +277,11 @@ async function boot() {
     camera,
     controls,
     prism,
+    cubeFront,
+    cubeBack,
+    interiorRim,
+    rim,
+    surfaceDetails,
     material,
     backMaterial,
     interiorRimMaterial,
