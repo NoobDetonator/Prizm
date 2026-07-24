@@ -135,10 +135,27 @@
         <label class="preset-field">
           <span class="row">Environment</span>
           <select id="env-source">
-            <option value="procedural">Procedural (float HDR)</option>
-            <option value="reference" selected>Artistic image</option>
-            <option value="hdr">External .hdr (drop later)</option>
+            <optgroup label="Procedural float HDR">
+              <option value="proc:spectral" selected>Spectral blades</option>
+              <option value="proc:midnight">Midnight void</option>
+              <option value="proc:tungsten">Tungsten studio</option>
+              <option value="proc:disco">Disco slits</option>
+              <option value="proc:overcast">Overcast dome</option>
+              <option value="proc:aurora">Aurora wash</option>
+            </optgroup>
+            <optgroup label="Artistic plates">
+              <option value="art:gradientStudio">Gradient studio</option>
+              <option value="art:neonAlley">Neon alley</option>
+              <option value="art:paperSky">Paper sky</option>
+              <option value="art:emberHall">Ember hall</option>
+              <option value="art:iceRink">Ice rink</option>
+              <option value="reference">Reference PNG</option>
+            </optgroup>
+            <optgroup label="External">
+              <option value="hdr">External .hdr (/assets/studio.hdr)</option>
+            </optgroup>
           </select>
+          <small id="env-note">default · rainbow slits + hot suns</small>
         </label>
         <label>
           <span class="row">Exposure <em data-value="exposure">1.08</em></span>
