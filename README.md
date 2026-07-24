@@ -1,45 +1,58 @@
 # Prizm
 
-Visualizador web Three.js de um cubo-prisma artístico com física óptica aproximada, tipografia streetwear refratando atrás do cristal, e textura procedural.
+Three.js optical crystal — reusable prism material for any mesh, plus a streetwear demo.
 
-## Rodar
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Entry: `index.html` → `src/main.js`. Não criar arquivos `V2` / `New` / `Final` — editar o existente e apagar o que for substituído.
+- Demo: `index.html` → `src/main.js`
+- Library examples: `/examples/` (`box`, `torusknot`, `two-prisms`, `gltf`, `embedded`, `physical`)
 
-## Física mapeada no material
+## Library
 
-| Fenômeno | Na natureza | No Three.js |
+```js
+import { createPrism, createPrismEnvironment } from './src/lib/prizm/index.js'
+
+const prism = createPrism({ renderer, preset: 'crystal', engine: 'custom' })
+prism.attach(mesh)
+
+// each frame (custom engine):
+prism.beforeRender(renderer, scene, camera)
+prism.update(t)
+renderer.render(scene, camera)
+```
+
+| Engine | What it is | Needs `beforeRender` |
 | --- | --- | --- |
-| Refração (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | `ior` |
-| Dispersão | \(n = n(\lambda)\); azul desvia mais que vermelho | `dispersion` (IOR por canal RGB) |
-| Absorção no volume | Beer–Lambert | `attenuationColor` + `attenuationDistance` |
-| Caminho óptico | espessura do meio | `thickness` |
-| Translucidez | scatter + absorção | slider mistura transmission / attenuation |
-| Micro-relevo | poeira / riscos | `roughnessMap` + `normalMap` |
+| `custom` (default) | Own double-refract + spectral RGB + in-shader caustics | Yes — captures opaque scene |
+| `physical` | `MeshPhysicalMaterial.transmission` (Three’s path) | No |
 
-Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\approx1.85\).
+Zero DOM. Multiple instances are safe. `dispose()` releases materials, textures, and refraction RTs.
 
-## O que tem
+## Honest physics map
 
-- Cubo com bordas arredondadas + transmission física
-- Parede tipográfica streetwear animada (texto refrata no cristal)
-- Cáusticas espectrais internas animadas
-- Pós-processamento **somente no cubo** (fundo fica limpo via máscara)
-- Pipeline de pós-processamento reutilizável:
-  - Dual Kawase bloom
-  - Glare anamórfico
-  - Lens flare (ghosts)
-  - Depth of field (Bokeh)
-  - Afterimage / ghost trails
-  - Halftone CMYK
-  - ASCII grayscale no cubo (branco/cinza · geometria escondida · forma só pelos glifos)
-  - Aberração cromática / vinheta / grain
-- Presets artísticos (studio, anamorphic, portrait, neon ASCII, ghost trail, print shop, prism chaos)
-- Controles de render: exposure, DPR, transmission scale, tone map
-- Export de render 2×
-- Painel com presets e sliders ao vivo
+| Phenomenon | Nature | In Prizm |
+| --- | --- | --- |
+| Refraction (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | Custom: entry+exit `refract()`; physical: `ior` |
+| Dispersion | \(n(\lambda)\) | Custom: per-channel IOR samples; physical: `dispersion` |
+| Double refraction | Ray bends in **and** out | Custom approximates exit with \(-N\) + thickness; not a full path tracer |
+| Absorption | Beer–Lambert | `attenuationColor` / distance (both engines) |
+| Thickness | Optical path | `estimateThickness(geometry)` or slider; optional thickness hint map on physical |
+| Interior caustics | Focused refracted light | Custom: **procedural in-shader**; demo physical: additive blades (not in transmission RT) |
+| Streetwear wall | Opaque plate behind glass | Demo physical sees it via Three transmission; custom sees it via screen-space capture |
+
+Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\approx1.85\) (art-directed).
+
+## Demo vs library
+
+The **demo** keeps `MeshPhysicalMaterial` + selective post-FX (bloom, glare, flare, DoF, ASCII, …) so the streetwear look stays stable. The **library** is the reusable API (`createPrism`) with the custom prism shader as the default engine.
+
+See `docs/ARQUITETURA.md` and `docs/DEBITO-TECNICO.md`.
+
+## Rules
+
+No `V2` / `New` / `Final` filenames. Edit in place; delete what you replace. No new dependencies without approval.
