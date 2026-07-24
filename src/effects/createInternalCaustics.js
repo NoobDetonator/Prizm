@@ -127,18 +127,19 @@ function createBlade({ width, height, colors, intensity, position, rotation, pha
     color: new THREE.Color().setScalar(intensity),
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.85,
+    opacity: 0.55,
     depthWrite: false,
-    depthTest: true,
+    depthTest: false,
     blending: THREE.AdditiveBlending,
     toneMapped: false,
   })
 
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material)
-  mesh.renderOrder = 1.2
+  // After opaque/transmissive glass (renderOrder 2) so additive blades are not depth-killed.
+  mesh.renderOrder = 3.5
   mesh.position.set(...position)
   mesh.rotation.set(...rotation)
-  mesh.userData.baseIntensity = intensity
+  mesh.userData.baseIntensity = intensity * 0.45
   mesh.userData.basePosition = mesh.position.clone()
   mesh.userData.baseRotation = mesh.rotation.clone()
   mesh.userData.phase = phase
