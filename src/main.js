@@ -7,7 +7,14 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { SavePass } from 'three/addons/postprocessing/SavePass.js'
 import { createPrismTexture } from './textures/createPrismTexture.js'
-import { createPrismEnvironment } from './env/createPrismEnvironment.js'
+import {
+  createPrismEnvironment,
+  PROCEDURAL_ENV_PRESETS,
+} from './env/createPrismEnvironment.js'
+import {
+  createArtisticEnvironment,
+  ARTISTIC_ENV_PRESETS,
+} from './env/createArtisticEnvironment.js'
 import { loadArtisticImageEnvironment } from './env/loadImageEnvironment.js'
 import { loadHdrEnvironment } from './env/loadHdrEnvironment.js'
 import { createStreetwearBackdrop } from './backdrop/createStreetwearBackdrop.js'
@@ -69,6 +76,7 @@ const ui = {
   exposure: document.querySelector('#exposure'),
   envIntensity: document.querySelector('#env-intensity'),
   envSource: document.querySelector('#env-source'),
+  envNote: document.querySelector('#env-note'),
   dpr: document.querySelector('#dpr'),
   transmissionScale: document.querySelector('#transmission-scale'),
   tonemap: document.querySelector('#tonemap'),
@@ -131,12 +139,14 @@ controls.maxDistance = 8
 controls.target.set(0, -0.04, 0)
 controls.update()
 
-let activeEnvironment = createPrismEnvironment(renderer)
+const environmentCache = new Map()
+let activeEnvironment = createPrismEnvironment(renderer, 'spectral')
+environmentCache.set('proc:spectral', activeEnvironment)
 scene.environment = activeEnvironment
 scene.environmentIntensity = 2.5
-const proceduralEnvironment = activeEnvironment
 let referenceEnvironment = null
 let hdrEnvironment = null
+syncEnvNote(ui.envSource?.value || 'proc:spectral')
 
 const textures = createPrismTexture(1536)
 const maxAnisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy())
@@ -335,6 +345,47 @@ async function boot() {
       applyUi()
       return true
     },
+    async setEnvironment(kind) {
+      if (ui.envSource) ui.envSource.value = kind
+      await switchEnvironment(kind)
+      applyUi()
+      return kind
+    },
+    listEnvironments() {
+      return {
+        procedural: Object.values(PROCEDURAL_ENV_PRESETS).map((p) => ({
+          id: `proc:${p.id}`,
+          label: p.label,
+          note: p.note,
+        })),
+        artistic: [
+          ...Object.values(ARTISTIC_ENV_PRESETS).map((p) => ({
+            id: `art:${p.id}`,
+            label: p.label,
+            note: p.note,
+          })),
+          { id: 'reference', label: 'Reference PNG', note: 'LDR creative plate' },
+        ],
+      }
+    },
+    setUiVisible(visible) {
+      const show = Boolean(visible)
+      ui.panel.classList.remove('is-open')
+      ui.panel.style.display = show ? '' : 'none'
+      panelToggle.style.display = show ? '' : 'none'
+      const hud = document.querySelector('.hud')
+      const hint = document.querySelector('.hint')
+      if (hud) hud.style.display = show ? '' : 'none'
+      if (hint) hint.style.display = show ? '' : 'none'
+      panelToggle.setAttribute('aria-expanded', 'false')
+      panelToggle.textContent = 'Controles'
+    },
+    setRenderControls( partial = {} ) {
+      if (partial.exposure != null && ui.exposure) ui.exposure.value = String(partial.exposure)
+      if (partial.envIntensity != null && ui.envIntensity) ui.envIntensity.value = String(partial.envIntensity)
+      if (partial.dpr != null && ui.dpr) ui.dpr.value = String(partial.dpr)
+      applyUi()
+    },
     setAutoSpin(value) {
       autoSpin = Boolean(value)
     },
@@ -415,30 +466,53 @@ async function boot() {
     },
   }
 
-  try {
-    referenceEnvironment = await loadArtisticImageEnvironment(
-      renderer,
-      '/assets/prism-environment-reference.png',
-      { exposure: 2.0 },
-    )
-    if (ui.envSource.value === 'reference') {
-      scene.environment = referenceEnvironment
-      scene.environmentRotation.y = 0.72
-      activeEnvironment = referenceEnvironment
-      window.__prizm.environment = activeEnvironment
-    }
-  } catch (error) {
-    console.warn('Reference environment could not be loaded; using procedural fallback.', error)
-    ui.envSource.value = 'procedural'
-  }
 }
 
-async function switchEnvironment(kind) {
-  if (kind === 'procedural') {
-    scene.environment = proceduralEnvironment
-    scene.environmentRotation.y = 0
-    activeEnvironment = proceduralEnvironment
-  } else if (kind === 'reference') {
+function syncEnvNote(kind) {
+  if (!ui.envNote) return
+  if (kind?.startsWith('proc:')) {
+    const id = kind.slice(5)
+    ui.envNote.textContent = PROCEDURAL_ENV_PRESETS[id]?.note || 'procedural float HDR'
+    return
+  }
+  if (kind?.startsWith('art:')) {
+    const id = kind.slice(4)
+    ui.envNote.textContent = ARTISTIC_ENV_PRESETS[id]?.note || 'artistic plate'
+    return
+  }
+  if (kind === 'reference') {
+    ui.envNote.textContent = 'LDR reference PNG · creative plate'
+    return
+  }
+  if (kind === 'hdr') {
+    ui.envNote.textContent = 'Radiance .hdr from /assets/studio.hdr'
+    return
+  }
+  // Back-compat with older bookmark values
+  if (kind === 'procedural') ui.envNote.textContent = PROCEDURAL_ENV_PRESETS.spectral.note
+}
+
+async function ensureEnvironment(kind) {
+  // Legacy aliases
+  if (kind === 'procedural') kind = 'proc:spectral'
+
+  if (environmentCache.has(kind)) return environmentCache.get(kind)
+
+  if (kind.startsWith('proc:')) {
+    const id = kind.slice(5)
+    const env = createPrismEnvironment(renderer, id)
+    environmentCache.set(kind, env)
+    return env
+  }
+
+  if (kind.startsWith('art:')) {
+    const id = kind.slice(4)
+    const env = createArtisticEnvironment(renderer, id)
+    environmentCache.set(kind, env)
+    return env
+  }
+
+  if (kind === 'reference') {
     if (!referenceEnvironment) {
       referenceEnvironment = await loadArtisticImageEnvironment(
         renderer,
@@ -446,24 +520,37 @@ async function switchEnvironment(kind) {
         { exposure: 2.0 },
       )
     }
-    scene.environment = referenceEnvironment
-    scene.environmentRotation.y = 0.72
-    activeEnvironment = referenceEnvironment
-  } else if (kind === 'hdr') {
-    // Optional: place a file at /assets/studio.hdr to use this path.
-    try {
-      if (!hdrEnvironment) {
-        hdrEnvironment = await loadHdrEnvironment(renderer, '/assets/studio.hdr')
-      }
-      scene.environment = hdrEnvironment
-      scene.environmentRotation.y = 0
-      activeEnvironment = hdrEnvironment
-    } catch (error) {
-      console.warn('HDR environment missing — falling back to procedural float.', error)
-      ui.envSource.value = 'procedural'
-      scene.environment = proceduralEnvironment
-      activeEnvironment = proceduralEnvironment
+    environmentCache.set('reference', referenceEnvironment)
+    return referenceEnvironment
+  }
+
+  if (kind === 'hdr') {
+    if (!hdrEnvironment) {
+      hdrEnvironment = await loadHdrEnvironment(renderer, '/assets/studio.hdr')
     }
+    environmentCache.set('hdr', hdrEnvironment)
+    return hdrEnvironment
+  }
+
+  throw new Error(`Unknown environment: ${kind}`)
+}
+
+async function switchEnvironment(kind) {
+  try {
+    const env = await ensureEnvironment(kind)
+    scene.environment = env
+    // Artistic / reference plates look better slightly yawed; procedural stays aligned.
+    scene.environmentRotation.y = kind.startsWith('art:') || kind === 'reference' ? 0.55 : 0
+    activeEnvironment = env
+    syncEnvNote(kind)
+  } catch (error) {
+    console.warn(`Environment "${kind}" failed — falling back to proc:spectral.`, error)
+    ui.envSource.value = 'proc:spectral'
+    const env = await ensureEnvironment('proc:spectral')
+    scene.environment = env
+    scene.environmentRotation.y = 0
+    activeEnvironment = env
+    syncEnvNote('proc:spectral')
   }
   if (window.__prizm) window.__prizm.environment = activeEnvironment
 }
