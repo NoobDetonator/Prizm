@@ -129,6 +129,18 @@
 
         <p class="panel-section">Render</p>
         <label>
+          <span class="row">Env intensity <em data-value="env-intensity">2.50</em></span>
+          <input id="env-intensity" type="range" min="0.5" max="6" step="0.05" value="2.5" />
+        </label>
+        <label class="preset-field">
+          <span class="row">Environment</span>
+          <select id="env-source">
+            <option value="procedural">Procedural (float HDR)</option>
+            <option value="reference" selected>Artistic image</option>
+            <option value="hdr">External .hdr (drop later)</option>
+          </select>
+        </label>
+        <label>
           <span class="row">Exposure <em data-value="exposure">1.08</em></span>
           <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.08" />
         </label>

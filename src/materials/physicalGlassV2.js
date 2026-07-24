@@ -9,7 +9,7 @@ export const MATERIAL_PRESETS = {
     transmission: 1,
     attenuationColor: '#e8f2ff',
     attenuationDistance: 2.8,
-    envMapIntensity: 1.45,
+    envMapIntensity: 0.85,
     note: 'n≈1.52 · clean crown glass',
   },
   flint: {
@@ -20,7 +20,7 @@ export const MATERIAL_PRESETS = {
     transmission: 1,
     attenuationColor: '#ffe8d8',
     attenuationDistance: 1.8,
-    envMapIntensity: 1.7,
+    envMapIntensity: 1.0,
     note: 'n≈1.62 · warm high-dispersion flint',
   },
   crystal: {
@@ -31,7 +31,7 @@ export const MATERIAL_PRESETS = {
     transmission: 1,
     attenuationColor: '#d8ecff',
     attenuationDistance: 1.7,
-    envMapIntensity: 2,
+    envMapIntensity: 1.15,
     note: 'n≈1.85 · art-directed optical crystal',
   },
 }

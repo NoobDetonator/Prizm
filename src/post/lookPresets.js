@@ -238,6 +238,7 @@ export const LOOK_UI_KEYS = {
   vignette: 'vignette',
   grain: 'grain',
   exposure: 'exposure',
+  envIntensity: 'envIntensity',
   dpr: 'dpr',
   transmissionScale: 'transmissionScale',
   tonemap: 'tonemap',

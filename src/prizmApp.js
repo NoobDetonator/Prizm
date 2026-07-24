@@ -8,7 +8,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { SavePass } from 'three/addons/postprocessing/SavePass.js'
 import { createPrismTexture } from './textures/createPrismTexture.js'
 import { createPrismEnvironment } from './env/createPrismEnvironment.js'
-import { loadImageEnvironment } from './env/loadImageEnvironment.js'
+import { loadArtisticImageEnvironment } from './env/loadImageEnvironment.js'
+import { loadHdrEnvironment } from './env/loadHdrEnvironment.js'
 import { createStreetwearBackdrop } from './backdrop/createStreetwearBackdrop.js'
 import { ChromaShader } from './post/ChromaShader.js'
 import { FilmGradeShader } from './post/FilmGradeShader.js'
@@ -66,6 +67,8 @@ const ui = {
   vignette: document.querySelector('#vignette'),
   grain: document.querySelector('#grain'),
   exposure: document.querySelector('#exposure'),
+  envIntensity: document.querySelector('#env-intensity'),
+  envSource: document.querySelector('#env-source'),
   dpr: document.querySelector('#dpr'),
   transmissionScale: document.querySelector('#transmission-scale'),
   tonemap: document.querySelector('#tonemap'),
@@ -124,6 +127,10 @@ controls.update()
 
 let activeEnvironment = createPrismEnvironment(renderer)
 scene.environment = activeEnvironment
+scene.environmentIntensity = 2.5
+const proceduralEnvironment = activeEnvironment
+let referenceEnvironment = null
+let hdrEnvironment = null
 
 const textures = createPrismTexture(1536)
 const maxAnisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy())
@@ -402,15 +409,56 @@ async function boot() {
   }
 
   try {
-    const imageEnvironment = await loadImageEnvironment(renderer, '/assets/prism-environment-reference.png')
-    scene.environment = imageEnvironment
-    scene.environmentRotation.y = 0.72
-    activeEnvironment.dispose()
-    activeEnvironment = imageEnvironment
-    window.__prizm.environment = activeEnvironment
+    referenceEnvironment = await loadArtisticImageEnvironment(
+      renderer,
+      '/assets/prism-environment-reference.png',
+      { exposure: 2.0 },
+    )
+    if (ui.envSource.value === 'reference') {
+      scene.environment = referenceEnvironment
+      scene.environmentRotation.y = 0.72
+      activeEnvironment = referenceEnvironment
+      window.__prizm.environment = activeEnvironment
+    }
   } catch (error) {
     console.warn('Reference environment could not be loaded; using procedural fallback.', error)
+    ui.envSource.value = 'procedural'
   }
+}
+
+async function switchEnvironment(kind) {
+  if (kind === 'procedural') {
+    scene.environment = proceduralEnvironment
+    scene.environmentRotation.y = 0
+    activeEnvironment = proceduralEnvironment
+  } else if (kind === 'reference') {
+    if (!referenceEnvironment) {
+      referenceEnvironment = await loadArtisticImageEnvironment(
+        renderer,
+        '/assets/prism-environment-reference.png',
+        { exposure: 2.0 },
+      )
+    }
+    scene.environment = referenceEnvironment
+    scene.environmentRotation.y = 0.72
+    activeEnvironment = referenceEnvironment
+  } else if (kind === 'hdr') {
+    // Optional: place a file at /assets/studio.hdr to use this path.
+    try {
+      if (!hdrEnvironment) {
+        hdrEnvironment = await loadHdrEnvironment(renderer, '/assets/studio.hdr')
+      }
+      scene.environment = hdrEnvironment
+      scene.environmentRotation.y = 0
+      activeEnvironment = hdrEnvironment
+    } catch (error) {
+      console.warn('HDR environment missing — falling back to procedural float.', error)
+      ui.envSource.value = 'procedural'
+      scene.environment = proceduralEnvironment
+      activeEnvironment = proceduralEnvironment
+    }
+  }
+  if (window.__prizm) window.__prizm.environment = activeEnvironment
 }
 
 function readUi() {
@@ -434,6 +482,8 @@ function readUi() {
     vignette: Number(ui.vignette.value),
     grain: Number(ui.grain.value),
     exposure: Number(ui.exposure.value),
+    envIntensity: Number(ui.envIntensity.value),
+    envSource: ui.envSource.value,
     dpr: Number(ui.dpr.value),
     transmissionScale: Number(ui.transmissionScale.value),
     tonemap: ui.tonemap.value,
@@ -498,6 +548,7 @@ function applyUi() {
   renderer.toneMappingExposure = values.exposure
   renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
   renderer.transmissionResolutionScale = values.transmissionScale
+  scene.environmentIntensity = values.envIntensity
 
   const nextDprCap = THREE.MathUtils.clamp(values.dpr, 1, 2)
   if (Math.abs(nextDprCap - maxDprCap) > 0.001) {
@@ -523,6 +574,7 @@ function applyUi() {
   setValueLabel('vignette', values.vignette.toFixed(2))
   setValueLabel('grain', values.grain.toFixed(2))
   setValueLabel('exposure', values.exposure.toFixed(2))
+  setValueLabel('env-intensity', values.envIntensity.toFixed(2))
   setValueLabel('dpr', values.dpr.toFixed(2))
   setValueLabel('transmission-scale', values.transmissionScale.toFixed(2))
   setValueLabel('speckle', values.speckle.toFixed(2))
@@ -560,6 +612,11 @@ function bindUi() {
   })
 
   ui.tonemap.addEventListener('change', update)
+  ui.envSource.addEventListener('change', async (event) => {
+    stop(event)
+    await switchEnvironment(ui.envSource.value)
+    applyUi()
+  })
 
   const sliders = [
     ui.dispersion,
@@ -580,6 +637,7 @@ function bindUi() {
     ui.vignette,
     ui.grain,
     ui.exposure,
+    ui.envIntensity,
     ui.dpr,
     ui.transmissionScale,
     ui.speckle,

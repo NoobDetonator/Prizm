@@ -1,15 +1,17 @@
 import * as THREE from 'three'
 
 /**
- * Turns an ordinary reference image into a lighting-ready equirectangular
- * environment. The source remains LDR, but the PMREM output behaves like an
- * artistic image-based lighting rig for reflections and transmission.
+ * Artistic LDR image → equirectangular PMREM.
+ * This is NOT physically correct IBL (PNG poles distort; values clamp at 1.0).
+ * Kept as a creative lighting plate. Use `exposure` to push some dynamic range
+ * into the canvas before PMREM so speculars can still bloom.
  */
-export async function loadImageEnvironment(renderer, url, options = {}) {
+export async function loadArtisticImageEnvironment(renderer, url, options = {}) {
   const size = options.size ?? 2048
   const saturation = options.saturation ?? 1.28
   const contrast = options.contrast ?? 1.18
   const brightness = options.brightness ?? 1.08
+  const exposure = options.exposure ?? 2.0
 
   const source = await new THREE.TextureLoader().loadAsync(url)
   const image = source.image
@@ -37,11 +39,11 @@ export async function loadImageEnvironment(renderer, url, options = {}) {
     sx = (image.width - sw) / 2
   }
 
-  ctx.filter = `saturate(${saturation}) contrast(${contrast}) brightness(${brightness})`
+  // Bake exposure into the LDR plate so PMREM gets brighter midtones/highlights.
+  ctx.filter = `saturate(${saturation}) contrast(${contrast}) brightness(${brightness * exposure})`
   ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
   ctx.filter = 'none'
 
-  // Dark, matching borders make the longitude seam disappear in reflections.
   const seam = ctx.createLinearGradient(0, 0, canvas.width, 0)
   seam.addColorStop(0, 'rgba(0,0,0,0.88)')
   seam.addColorStop(0.045, 'rgba(0,0,0,0)')
@@ -61,11 +63,15 @@ export async function loadImageEnvironment(renderer, url, options = {}) {
   pmrem.compileEquirectangularShader()
   const environment = pmrem.fromEquirectangular(equirectangular).texture
   environment.userData.source = url
+  environment.userData.kind = 'artistic-ldr'
+  environment.userData.exposure = exposure
   environment.userData.sourceSize = [image.width, image.height]
-  environment.userData.projectionSize = [canvas.width, canvas.height]
 
   source.dispose()
   equirectangular.dispose()
   pmrem.dispose()
   return environment
 }
+
+/** @deprecated use loadArtisticImageEnvironment */
+export const loadImageEnvironment = loadArtisticImageEnvironment
