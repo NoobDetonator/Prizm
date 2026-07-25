@@ -33,13 +33,6 @@ export function createPrismTexture(size = 1024, seed = 7) {
   return maps
 }
 
-export function downloadTexture(canvas, filename = 'prizm-surface.png') {
-  const link = document.createElement('a')
-  link.download = filename
-  link.href = canvas.toDataURL('image/png')
-  link.click()
-}
-
 function canvasToTexture(canvas, flipY = true) {
   const texture = new THREE.CanvasTexture(canvas)
   texture.flipY = flipY

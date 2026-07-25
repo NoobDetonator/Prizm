@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "index.html",
+    "src/lib/prizm/index.js!",
+    "examples/**/*.html",
+    "scripts/*.mjs"
+  ],
+  "project": ["src/**/*.js", "scripts/**/*.mjs"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": ["knip"]
+}

@@ -226,7 +226,7 @@ export const LOOK_PRESETS = {
 }
 
 /** Maps look-preset value keys → UI element ids / property names on the ui object. */
-export const LOOK_UI_KEYS = {
+const LOOK_UI_KEYS = {
   preset: 'preset',
   dispersion: 'dispersion',
   thickness: 'thickness',

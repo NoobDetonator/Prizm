@@ -9,7 +9,7 @@ import {
 import { loadArtisticImageEnvironment } from '../env/loadImageEnvironment.js'
 import { loadHdrEnvironment } from '../env/loadHdrEnvironment.js'
 
-export function pickEnvQuality() {
+function pickEnvQuality() {
   const params = new URLSearchParams(window.location.search)
   const forced = params.get('envQuality')
   if (forced === 'high' || forced === 'medium') return forced

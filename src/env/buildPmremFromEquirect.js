@@ -31,7 +31,7 @@ export function buildPmremFromEquirect(renderer, equirect, meta = {}) {
 }
 
 /** sRGB byte → linear float */
-export function srgb8ToLinear(c) {
+function srgb8ToLinear(c) {
   const x = c / 255
   return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
 }

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { MATERIAL_PRESETS } from '../lib/prizm/index.js'
 import { LOOK_PRESETS, applyLookPreset } from '../post/lookPresets.js'
 
-export const TONE_MAP = {
+const TONE_MAP = {
   aces: THREE.ACESFilmicToneMapping,
   reinhard: THREE.ReinhardToneMapping,
   cineon: THREE.CineonToneMapping,
@@ -58,7 +58,7 @@ export function createPanelToggle(ui) {
   return panelToggle
 }
 
-export function readUi(ui) {
+function readUi(ui) {
   return {
     engine: ui.engine?.value || 'physical',
     preset: ui.preset.value,
@@ -87,7 +87,7 @@ export function readUi(ui) {
   }
 }
 
-export function syncPresetToSliders(ui, key) {
+function syncPresetToSliders(ui, key) {
   const preset = MATERIAL_PRESETS[key]
   if (!preset) return
   ui.ior.value = String(preset.ior)

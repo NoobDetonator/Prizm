@@ -71,6 +71,3 @@ export async function loadArtisticImageEnvironment(renderer, url, options = {}) 
     equirectSize: [canvas.width, canvas.height],
   })
 }
-
-/** @deprecated use loadArtisticImageEnvironment */
-export const loadImageEnvironment = loadArtisticImageEnvironment

@@ -11,10 +11,11 @@
     "test:dispersion": "node scripts/test-dispersion.mjs",
     "test:leak": "node scripts/leak-test.mjs",
     "check:lib": "node scripts/check-lib-bundle.mjs",
-    "audit:sliders": "node scripts/slider-audit-after.mjs",
+    "audit:sliders": "node scripts/slider-audit.mjs",
     "capture:previews": "node scripts/capture-previews.mjs",
     "capture:matrix": "node scripts/capture-matrix.mjs",
-    "lint:dead": "node -e \"console.log('Run: npx knip (optional). Rule: no V2/New/Final suffixes; delete replaced files in the same commit.')\""
+    "measure:perf": "node scripts/measure-perf.mjs",
+    "lint:dead": "npx knip"
   },
   "dependencies": {
     "three": "^0.178.0"

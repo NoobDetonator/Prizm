@@ -18,6 +18,3 @@ export function estimateThicknessFromBounds(geometry, { scale = 0.85 } = {}) {
   const minAxis = Math.max(1e-4, Math.min(size.x, size.y, size.z))
   return minAxis * scale
 }
-
-/** @deprecated use estimateThicknessFromBounds */
-export const estimateThickness = estimateThicknessFromBounds
