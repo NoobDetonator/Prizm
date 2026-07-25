@@ -13,24 +13,16 @@ import { createPrismRimMaterial } from '../../materials/prismRimMaterial.js'
 import { createPrismTexture } from '../../textures/createPrismTexture.js'
 import { createInternalCaustics } from '../../effects/createInternalCaustics.js'
 import { createRefractionCapture } from './createRefractionCapture.js'
-import { estimateThickness, createThicknessHintMap } from './estimateThickness.js'
+import { createBackfaceCapture } from './createBackfaceCapture.js'
+import { estimateThicknessFromBounds } from './estimateThickness.js'
 
 /**
  * Reusable prism attachment for any Mesh.
  * Zero DOM. Multiple instances are safe (all state is closed over).
  *
- * @example
- * const prism = createPrism({ renderer, preset: 'crystal', engine: 'custom' })
- * prism.attach(mesh)
- * // each frame:
- * prism.beforeRender(renderer, scene, camera)
- * prism.update(t)
- * prism.setParams({ ior: 1.7, dispersion: 1.2 })
- * prism.dispose()
- *
  * Engines:
- * - `custom` — double-refract + spectral screen/env shader (Phase 7). Call beforeRender.
- * - `physical` — Three MeshPhysicalMaterial.transmission (sees opaque scene without capture).
+ * - `custom` — double-refract + spectral RGB with backface exit normals. Call beforeRender.
+ * - `physical` — Three MeshPhysicalMaterial.transmission.
  */
 export function createPrism({
   renderer,
@@ -47,7 +39,6 @@ export function createPrism({
     outerRim: true,
     innerRim: true,
     surfaceDetail: false,
-    // Additive blades are a physical-engine overlay; custom injects caustics in-shader.
     caustics: !useCustom,
     ...(shells || {}),
   }
@@ -64,26 +55,24 @@ export function createPrism({
 
   const interiorMat = createGlassInteriorRimMaterial()
   const rimMat = createPrismRimMaterial()
-  ensureShellOffset(interiorMat)
-  ensureShellOffset(rimMat)
 
-  const refraction = useCustom
-    ? createRefractionCapture({ scale: refractionScale })
-    : null
+  const refraction = useCustom ? createRefractionCapture({ scale: refractionScale }) : null
+  const backface = useCustom ? createBackfaceCapture({ scale: refractionScale }) : null
+  const viewProjection = new THREE.Matrix4()
 
   /** @type {THREE.Object3D | null} */
   let host = null
+  /** @type {THREE.Material | THREE.Material[] | null} */
+  let originalMaterial = null
   /** @type {THREE.Group | null} */
   let root = null
-  /** @type {THREE.Mesh | null} */
-  let glassMesh = null
   /** @type {THREE.Mesh | null} */
   let interiorMesh = null
   /** @type {THREE.Mesh | null} */
   let rimMesh = null
   let caustics = null
-  let thicknessHint = null
   let disposed = false
+  let thicknessOverridden = false
   let params = {
     presetKey: preset,
     ior: MATERIAL_PRESETS[preset]?.ior ?? 1.85,
@@ -101,21 +90,17 @@ export function createPrism({
     detach()
 
     host = mesh
+    originalMaterial = mesh.material
+    mesh.userData._prizmOriginalMaterial = originalMaterial
+
     mesh.geometry.computeBoundingSphere()
     mesh.geometry.computeBoundingBox()
     const radius = mesh.geometry.boundingSphere?.radius || 1
     const innerOffset = -0.008 * radius
     const outerOffset = 0.01 * radius
 
-    // Auto thickness from bounds when caller has not overridden.
-    if (params.thickness === (MATERIAL_PRESETS[preset]?.thickness ?? 1.9)) {
-      params.thickness = estimateThickness(mesh.geometry)
-    }
-
-    if (!useCustom) {
-      thicknessHint?.dispose?.()
-      thicknessHint = createThicknessHintMap(mesh.geometry)
-      glass.thicknessMap = thicknessHint
+    if (!thicknessOverridden) {
+      params.thickness = estimateThicknessFromBounds(mesh.geometry)
     }
 
     mesh.material = glass
@@ -154,7 +139,6 @@ export function createPrism({
       caustics.userData.setIntensity?.(params.caustics)
     }
 
-    glassMesh = mesh
     syncEnvironment(mesh)
     applyAll()
     return api
@@ -168,24 +152,33 @@ export function createPrism({
   }
 
   function detach() {
-    if (root && host) host.remove(root)
+    if (host) {
+      if (root) host.remove(root)
+      // Restore pre-attach material (C1)
+      if (originalMaterial != null) {
+        host.material = originalMaterial
+      }
+      delete host.userData._prizmOriginalMaterial
+    }
     if (caustics?.userData.dispose) caustics.userData.dispose()
     root = null
     interiorMesh = null
     rimMesh = null
     caustics = null
-    glassMesh = null
     host = null
+    originalMaterial = null
   }
 
   function setParams(next = {}) {
+    if (next.thickness != null) thicknessOverridden = true
     params = { ...params, ...next }
     if (next.preset && MATERIAL_PRESETS[next.preset]) {
       params.presetKey = next.preset
       const p = MATERIAL_PRESETS[next.preset]
       params.ior = next.ior ?? p.ior
       params.dispersion = next.dispersion ?? p.dispersion
-      params.thickness = next.thickness ?? p.thickness
+      if (next.thickness == null && !thicknessOverridden) params.thickness = p.thickness
+      else if (next.thickness != null) params.thickness = next.thickness
       params.roughness = next.roughness ?? p.roughness
     }
     applyAll()
@@ -207,18 +200,31 @@ export function createPrism({
   }
 
   /**
-   * Capture opaque scene into the refraction RT (custom engine only).
-   * Hide the host (+ shells) so the crystal does not refract itself.
-   * @param {THREE.Object3D[]} [extraHide] other prism hosts to exclude (multi-instance)
+   * Custom engine: backface normals → scene refraction plate → feed material.
+   * @param {THREE.Object3D[]} [extraHide]
    */
   function beforeRender(rendererIn, scene, camera, extraHide = []) {
-    if (!useCustom || !refraction || !host) return
+    if (!useCustom || !refraction || !backface || !host) return
+
     const size = new THREE.Vector2()
     rendererIn.getSize(size)
     const pr = rendererIn.getPixelRatio()
-    refraction.setSize(size.x * pr, size.y * pr)
-    glass.userData.setResolution?.(size.x * pr, size.y * pr)
+    const w = size.x * pr
+    const h = size.y * pr
+
+    backface.setSize(w, h)
+    refraction.setSize(w, h)
+    glass.userData.setResolution?.(w, h)
+
+    camera.updateMatrixWorld()
+    viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    glass.userData.setViewProjectionMatrix?.(viewProjection)
+
     if (scene.environment) glass.userData.setEnvMap(scene.environment)
+
+    const backTex = backface.capture(rendererIn, camera, host)
+    glass.userData.setBackfaceTexture?.(backTex)
+
     const hide = [host, ...extraHide].filter(Boolean)
     const tex = refraction.capture(rendererIn, scene, camera, hide)
     glass.userData.setRefractionTexture(tex)
@@ -239,8 +245,8 @@ export function createPrism({
     glass.dispose()
     interiorMat.dispose()
     rimMat.dispose()
-    thicknessHint?.dispose?.()
     refraction?.dispose?.()
+    backface?.dispose?.()
     for (const key of ['map', 'roughnessMap', 'normalMap']) textures[key]?.dispose?.()
   }
 
@@ -268,31 +274,5 @@ export function createPrism({
   return api
 }
 
-function ensureShellOffset(material) {
-  if (!material.uniforms.shellOffset) {
-    material.uniforms.shellOffset = { value: 0 }
-  }
-  if (material.userData._shellOffsetPatched) return
-
-  material.vertexShader = material.vertexShader.replace(
-    /void main\(\) \{/,
-    `uniform float shellOffset;\n      void main() {`,
-  )
-
-  if (material.vertexShader.includes('modelViewMatrix * vec4(position')) {
-    material.vertexShader = material.vertexShader.replace(
-      'modelViewMatrix * vec4(position, 1.0)',
-      'modelViewMatrix * vec4(position + normalize(normal) * shellOffset, 1.0)',
-    )
-  } else if (material.vertexShader.includes('modelMatrix * vec4(position')) {
-    material.vertexShader = material.vertexShader.replace(
-      'modelMatrix * vec4(position, 1.0)',
-      'modelMatrix * vec4(position + normalize(normal) * shellOffset, 1.0)',
-    )
-  }
-
-  material.needsUpdate = true
-  material.userData._shellOffsetPatched = true
-}
-
-export { MATERIAL_PRESETS, estimateThickness, createThicknessHintMap }
+export { MATERIAL_PRESETS, estimateThicknessFromBounds }
+export { estimateThicknessFromBounds as estimateThickness }

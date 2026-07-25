@@ -8,13 +8,16 @@ export function createPrismRimMaterial() {
       coolColor: { value: new THREE.Color('#43ccff') },
       warmColor: { value: new THREE.Color('#ff6532') },
       whiteColor: { value: new THREE.Color('#ffffff') },
+      shellOffset: { value: 0 },
     },
     vertexShader: /* glsl */ `
+      uniform float shellOffset;
       varying vec3 vWorldNormal;
       varying vec3 vViewDirection;
 
       void main() {
-        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vec3 displaced = position + normalize(normal) * shellOffset;
+        vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
         vWorldNormal = normalize(mat3(modelMatrix) * normal);
         vViewDirection = normalize(cameraPosition - worldPosition.xyz);
         gl_Position = projectionMatrix * viewMatrix * worldPosition;

@@ -23,14 +23,17 @@ export function createGlassInteriorRimMaterial() {
       coolColor: { value: new THREE.Color('#62d9ff') },
       warmColor: { value: new THREE.Color('#ff8560') },
       whiteColor: { value: new THREE.Color('#f7fbff') },
+      shellOffset: { value: 0 },
     },
     vertexShader: /* glsl */ `
+      uniform float shellOffset;
       varying vec3 vViewNormal;
       varying vec3 vViewDirection;
       varying vec3 vWorldNormal;
 
       void main() {
-        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        vec3 displaced = position + normalize(normal) * shellOffset;
+        vec4 viewPosition = modelViewMatrix * vec4(displaced, 1.0);
         vViewNormal = normalize(normalMatrix * normal);
         vViewDirection = normalize(-viewPosition.xyz);
         vWorldNormal = normalize(mat3(modelMatrix) * normal);

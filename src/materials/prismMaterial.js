@@ -7,13 +7,14 @@ import { MATERIAL_PRESETS } from './physicalGlass.js'
  * Pipeline per fragment:
  *  1. Fresnel (Schlick) splits reflection vs transmission.
  *  2. Entry refraction with per-channel IOR (dispersion).
- *  3. Exit refraction approximated with -N and thickness.
- *  4. Sample the pre-captured scene RT (tRefraction) and/or envMap.
- *  5. Beer–Lambert attenuation + optional procedural caustics inside the volume.
+ *  3. Exit refraction using captured backface world-normal (not -N).
+ *  4. Sample scene RT / env via NDC-projected exit points (per channel).
+ *  5. Beer–Lambert + procedural caustics.
  *
- * Call `material.userData.setRefractionTexture(tex)` each frame after capture.
- * This is NOT MeshPhysicalMaterial.transmission — opaque scene content must be
- * captured via createRefractionCapture / createPrism.beforeRender.
+ * Output is **linear, unclamped** — tone mapping belongs to EffectComposer OutputPass.
+ *
+ * Call each frame (via createPrism.beforeRender):
+ *   setBackfaceTexture / setRefractionTexture / setResolution / setViewProjection
  */
 export function createPrismMaterial({
   preset = 'crystal',
@@ -27,9 +28,13 @@ export function createPrismMaterial({
     name: 'PrizmDoubleRefract',
     uniforms: {
       tRefraction: { value: null },
-      envMap: { value: null }, // equirect float/LDR — not PMREM CubeUV
+      tBackfaceNormal: { value: null },
+      envMap: { value: null },
       envMapIntensity: { value: p.envMapIntensity },
       resolution: { value: new THREE.Vector2(1, 1) },
+      viewMatrixInverse: { value: new THREE.Matrix4() },
+      // projection * view — for NDC exit projection
+      viewProjectionMatrix: { value: new THREE.Matrix4() },
       ior: { value: p.ior },
       dispersion: { value: p.dispersion },
       thickness: { value: p.thickness },
@@ -47,6 +52,7 @@ export function createPrismMaterial({
       hasRoughnessMap: { value: roughnessMap ? 1 : 0 },
       hasNormalMap: { value: normalMap ? 1 : 0 },
       hasRefraction: { value: 0 },
+      hasBackface: { value: 0 },
       hasEnvMap: { value: 0 },
       color: { value: new THREE.Color('#f8fbff') },
     },
@@ -71,9 +77,11 @@ export function createPrismMaterial({
       precision highp float;
 
       uniform sampler2D tRefraction;
+      uniform sampler2D tBackfaceNormal;
       uniform sampler2D envMap;
       uniform float envMapIntensity;
       uniform vec2 resolution;
+      uniform mat4 viewProjectionMatrix;
       uniform float ior;
       uniform float dispersion;
       uniform float thickness;
@@ -91,6 +99,7 @@ export function createPrismMaterial({
       uniform float hasRoughnessMap;
       uniform float hasNormalMap;
       uniform float hasRefraction;
+      uniform float hasBackface;
       uniform float hasEnvMap;
       uniform vec3 color;
 
@@ -112,22 +121,29 @@ export function createPrismMaterial({
         return texture2D(envMap, equirectUv(dir)).rgb * envMapIntensity;
       }
 
-      vec2 screenUV(vec3 offsetView) {
-        vec2 ndc = vClip.xy / max(vClip.w, 1e-4);
-        vec2 uv = ndc * 0.5 + 0.5;
-        // Push UVs along projected refraction bend (screen-space double-refract cue).
-        uv += offsetView.xy * (0.04 + thickness * 0.035);
-        return clamp(uv, vec2(0.001), vec2(0.999));
-      }
-
       vec3 refractSpectral(vec3 I, vec3 N, float eta) {
         vec3 T = refract(I, N, eta);
-        // Total internal reflection fallback — graze to reflection.
         if (dot(T, T) < 1e-6) return reflect(I, N);
         return normalize(T);
       }
 
-      // Cheap interior caustic ribbons in local UV / world space (injected into volume).
+      // Project a world-space point to screen UV via the frame's viewProjection.
+      vec2 projectToScreenUV(vec3 worldPos) {
+        vec4 clip = viewProjectionMatrix * vec4(worldPos, 1.0);
+        vec2 ndc = clip.xy / max(clip.w, 1e-4);
+        return clamp(ndc * 0.5 + 0.5, vec2(0.001), vec2(0.999));
+      }
+
+      /**
+       * Screen UV for a channel: travel along T1 inside the volume, then look up
+       * the projected exit point. Uses real exit normal for the outgoing ray when
+       * sampling env; for the RT we sample at the projected exit footprint.
+       */
+      vec2 exitScreenUV(vec3 entryPos, vec3 T1, float path) {
+        vec3 exitPos = entryPos + T1 * path;
+        return projectToScreenUV(exitPos);
+      }
+
       vec3 proceduralCaustics(vec3 wp, float t) {
         float w1 = sin(wp.x * 7.2 + t * 1.3) * cos(wp.y * 5.1 - t * 0.9);
         float w2 = sin(wp.z * 6.4 - t * 1.1 + wp.x * 2.0);
@@ -143,7 +159,6 @@ export function createPrismMaterial({
         vec3 V = normalize(vViewDir);
         float facing = dot(N, V);
 
-        // Flip for back faces if ever drawn double-sided.
         if (facing < 0.0) {
           N = -N;
           facing = -facing;
@@ -155,42 +170,55 @@ export function createPrismMaterial({
         }
 
         if (hasNormalMap > 0.5) {
-          // Tangent-less object-space nudge — enough for procedural speckles.
           vec3 nTex = texture2D(normalMap, vUv).xyz * 2.0 - 1.0;
           N = normalize(N + vec3(nTex.xy * normalScale, 0.0));
         }
 
-        // Schlick F0 from IOR (air → glass).
+        // Exit normal from backface pre-pass (world space). Fallback -N only if missing.
+        vec3 exitN = -N;
+        if (hasBackface > 0.5) {
+          vec2 sUv = gl_FragCoord.xy / resolution;
+          vec4 packed = texture2D(tBackfaceNormal, sUv);
+          // Valid sample when depth was written (A > 0).
+          if (packed.a > 1e-4) {
+            exitN = normalize(packed.xyz * 2.0 - 1.0);
+            // Ensure exit normal faces roughly opposite the entry (outward on far face).
+            if (dot(exitN, N) > 0.0) exitN = -exitN;
+          }
+        }
+
         float eta0 = (ior - 1.0) / (ior + 1.0);
         float F0 = eta0 * eta0;
         float cosTheta = clamp(facing, 0.0, 1.0);
         float fresnel = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
         fresnel = mix(fresnel, 1.0, rough * 0.25);
 
-        // Dispersion: blue bends more (higher IOR) than red.
         float disp = dispersion * 0.028;
         float iorR = max(1.01, ior - disp);
         float iorG = max(1.01, ior);
         float iorB = max(1.01, ior + disp * 1.15);
 
-        // Incident from air into medium: eta = 1/ior
         vec3 I = normalize(-V);
         vec3 T1R = refractSpectral(I, N, 1.0 / iorR);
         vec3 T1G = refractSpectral(I, N, 1.0 / iorG);
         vec3 T1B = refractSpectral(I, N, 1.0 / iorB);
 
-        // Exit: travel ~thickness along refracted ray, then leave with eta = ior.
-        // Approximate exit normal as -N (parallel slab). Real meshes use thickness as path cue.
         float path = thickness / max(cosTheta, 0.2);
-        vec3 T2R = refractSpectral(T1R, -N, iorR);
-        vec3 T2G = refractSpectral(T1G, -N, iorG);
-        vec3 T2B = refractSpectral(T1B, -N, iorB);
+
+        // Exit: refract out against the real backface normal (eta = ior).
+        // GLSL refract expects N pointing toward the incident side; for exit from glass→air
+        // the interface normal should point into the glass (opposite outward exitN).
+        vec3 nOut = -exitN;
+        vec3 T2R = refractSpectral(T1R, nOut, iorR);
+        vec3 T2G = refractSpectral(T1G, nOut, iorG);
+        vec3 T2B = refractSpectral(T1B, nOut, iorB);
 
         vec3 transmitted;
         if (hasRefraction > 0.5) {
-          float r = texture2D(tRefraction, screenUV(T2R * path)).r;
-          float g = texture2D(tRefraction, screenUV(T2G * path)).g;
-          float b = texture2D(tRefraction, screenUV(T2B * path)).b;
+          // Per-channel screen lookup at projected exit footprints (T1 path differs by IOR).
+          float r = texture2D(tRefraction, exitScreenUV(vWorldPos, T1R, path)).r;
+          float g = texture2D(tRefraction, exitScreenUV(vWorldPos, T1G, path)).g;
+          float b = texture2D(tRefraction, exitScreenUV(vWorldPos, T1B, path)).b;
           transmitted = vec3(r, g, b);
         } else {
           transmitted = vec3(
@@ -200,7 +228,6 @@ export function createPrismMaterial({
           );
         }
 
-        // Mix a little env into transmission for HDR specular environment energy.
         if (hasEnvMap > 0.5) {
           vec3 envT = vec3(sampleEnv(T2R).r, sampleEnv(T2G).g, sampleEnv(T2B).b);
           transmitted = mix(transmitted, envT, 0.22 + translucency * 0.15);
@@ -208,7 +235,6 @@ export function createPrismMaterial({
 
         vec3 reflected = sampleEnv(reflect(I, N));
 
-        // Beer–Lambert attenuation along path length.
         float attenDist = max(attenuationDistance, 0.05);
         vec3 absorb = -log(max(attenuationColor, vec3(0.05))) / attenDist;
         vec3 beer = exp(-absorb * path * (0.65 + translucency * 0.9));
@@ -218,18 +244,13 @@ export function createPrismMaterial({
           transmitted *= texture2D(map, vUv).rgb;
         }
 
-        // Inject caustics inside the volume (true fix vs additive overlay blades).
         vec3 caustics = proceduralCaustics(vWorldPos, causticsTime) * causticsIntensity;
         transmitted += caustics * beer;
 
         vec3 lit = mix(transmitted, reflected, fresnel);
-        // Soft milky scatter from translucency.
         lit = mix(lit, mix(lit, attenuationColor, 0.35), translucency * 0.5);
 
-        // ACES-ish filmic — ShaderMaterial does not inherit renderer.toneMapping chunks.
-        lit *= 0.65;
-        lit = clamp((lit * (2.51 * lit + 0.03)) / (lit * (2.43 * lit + 0.59) + 0.14), 0.0, 1.0);
-
+        // Linear HDR — NO ACES / clamp here. OutputPass owns tone mapping.
         gl_FragColor = vec4(lit, 1.0);
       }
     `,
@@ -237,7 +258,7 @@ export function createPrismMaterial({
     depthWrite: true,
     depthTest: true,
     side: THREE.FrontSide,
-    toneMapped: true,
+    toneMapped: false,
   })
 
   material.userData.isPrismMaterial = true
@@ -245,14 +266,20 @@ export function createPrismMaterial({
     material.uniforms.tRefraction.value = texture
     material.uniforms.hasRefraction.value = texture ? 1 : 0
   }
+  material.userData.setBackfaceTexture = (texture) => {
+    material.uniforms.tBackfaceNormal.value = texture
+    material.uniforms.hasBackface.value = texture ? 1 : 0
+  }
   material.userData.setEnvMap = (env) => {
-    // scene.environment is usually PMREM CubeUV — custom shader needs the equirect source.
     const equirect = env?.userData?.equirect || (env?.isDataTexture ? env : null) || null
     material.uniforms.envMap.value = equirect
     material.uniforms.hasEnvMap.value = equirect ? 1 : 0
   }
   material.userData.setResolution = (w, h) => {
     material.uniforms.resolution.value.set(w, h)
+  }
+  material.userData.setViewProjectionMatrix = (matrix) => {
+    material.uniforms.viewProjectionMatrix.value.copy(matrix)
   }
 
   return material

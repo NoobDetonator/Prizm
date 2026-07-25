@@ -6,9 +6,10 @@ export {
   createPrism,
   MATERIAL_PRESETS,
   estimateThickness,
-  createThicknessHintMap,
+  estimateThicknessFromBounds,
 } from './createPrism.js'
 export { createRefractionCapture } from './createRefractionCapture.js'
+export { createBackfaceCapture } from './createBackfaceCapture.js'
 export { createPrismMaterial, applyPrismMaterialParams } from '../../materials/prismMaterial.js'
 export {
   createPrismEnvironment,
