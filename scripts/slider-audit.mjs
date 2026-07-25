@@ -6,7 +6,7 @@
  * - afterimage measured over N frames with camera motion.
  * - Runs for both engines: physical + custom.
  *
- * Usage: node scripts/slider-audit-after.mjs [baseUrl]
+ * Usage: node scripts/slider-audit.mjs [baseUrl]
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -16,9 +16,11 @@ import puppeteer from 'puppeteer-core'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outFile = path.join(root, 'docs', 'slider-audit.md')
-const beforeFile = path.join(root, 'docs', 'slider-audit-before.md')
 const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 const MAD_DEAD = 0.15
+
+/** Removed passes (bff9915) — never audit as live sliders. */
+const REMOVED_PASSES = ['glare', 'flare']
 
 const sliders = [
   'dispersion', 'thickness', 'ior', 'roughness', 'translucency', 'speckle',
@@ -40,16 +42,6 @@ const chromeCandidates = [
   '/usr/bin/google-chrome',
 ].filter(Boolean)
 
-function parseBeforeMad(md) {
-  /** @type {Record<string, number|null>} */
-  const map = {}
-  for (const line of md.split('\n')) {
-    const m = line.match(/^\| `([^`]+)` \| .*?MAD=([0-9.]+)/)
-    if (m) map[m[1]] = Number(m[2])
-  }
-  return map
-}
-
 async function auditEngine(page, engine) {
   await page.evaluate(async (e) => {
     await window.__prizm.setEngine(e)
@@ -61,9 +53,23 @@ async function auditEngine(page, engine) {
 
   const rows = []
   for (const id of sliders) {
+    // transmissionResolutionScale only exists for MeshPhysicalMaterial
+    if (id === 'transmission-scale' && engine === 'custom') {
+      rows.push({
+        slider: id,
+        changed: true,
+        mad: null,
+        na: true,
+        note: 'N/A no engine custom — só MeshPhysicalMaterial.transmission',
+      })
+      console.log(`[${engine}]`, id, 'N/A')
+      continue
+    }
+
     const result = await page.evaluate(async ({ sliderId, dependsOn: deps }) => {
       const el = document.getElementById(sliderId)
       if (!el) return { ok: false, reason: 'missing element' }
+      if (el.disabled) return { ok: false, reason: 'disabled', na: true }
 
       const setVal = (node, v) => {
         node.value = String(v)
@@ -184,8 +190,6 @@ async function main() {
   const executablePath = chromeCandidates.find((c) => fs.existsSync(c))
   if (!executablePath) throw new Error('Chrome not found')
 
-  const beforeMad = fs.existsSync(beforeFile) ? parseBeforeMad(fs.readFileSync(beforeFile, 'utf8')) : {}
-
   const browser = await puppeteer.launch({
     executablePath,
     headless: 'new',
@@ -217,33 +221,32 @@ async function main() {
   await browser.close()
 
   const lines = [
-    '# Slider audit (after — Plano V3)',
+    '# Slider audit',
     '',
     'Look: `studio`, camera locked, auto-spin off.',
     `Threshold: MAD < **${MAD_DEAD}** ⇒ dead / effectively dead.`,
     '',
-    'Methodology (V3.4):',
+    'Methodology:',
     '- `dof-focus` / `ascii-cell` audited with parent slider pinned at max.',
     '- `afterimage` audited over 8 motion frames (not a single still).',
     '- Both engines: `physical` and `custom`.',
+    `- Removed passes (not audited): ${REMOVED_PASSES.map((s) => `\`${s}\``).join(', ')} — deleted in \`bff9915\`.`,
+    '- `transmission-scale` is **N/A** on `custom` (PhysicalMaterial only).',
     '',
   ]
 
   for (const engine of engines) {
     const rows = byEngine[engine]
-    const dead = rows.filter((r) => !r.changed)
+    const dead = rows.filter((r) => !r.changed && !r.na)
     lines.push(`## Engine: \`${engine}\``, '')
-    lines.push('| slider | mudou? | MAD | MAD before (V0 physical) | observação |')
-    lines.push('| --- | --- | --- | --- | --- |')
+    lines.push('| slider | mudou? | MAD | observação |')
+    lines.push('| --- | --- | --- | --- |')
     for (const row of rows) {
-      const before = beforeMad[row.slider]
-      const beforeStr = before != null ? before.toFixed(4) : '—'
-      const afterStr = row.mad != null ? row.mad.toFixed(4) : '—'
-      lines.push(
-        `| \`${row.slider}\` | ${row.changed ? 'sim' : '**não**'} | ${afterStr} | ${beforeStr} | ${row.note} |`,
-      )
+      const afterStr = row.na ? 'N/A' : row.mad != null ? row.mad.toFixed(4) : '—'
+      const status = row.na ? 'N/A' : row.changed ? 'sim' : '**não**'
+      lines.push(`| \`${row.slider}\` | ${status} | ${afterStr} | ${row.note} |`)
     }
-    lines.push('', `Dead / weak: **${dead.length}** / ${rows.length}`, '')
+    lines.push('', `Dead / weak: **${dead.length}** / ${rows.filter((r) => !r.na).length}`, '')
     if (dead.length) {
       lines.push('### Still open', '')
       for (const r of dead) lines.push(`- \`${r.slider}\` — ${r.note}`)
@@ -254,13 +257,17 @@ async function main() {
   lines.push(
     '## Classification',
     '',
-    '- Methodology artifacts fixed above should no longer appear as false dead for dof-focus / ascii-cell / afterimage.',
-    '- Remaining DEAD/WEAK rows are real product bugs or known capture limits (`dpr` if buffer path ignores resize).',
+    '- `glare` / `flare`: **pass removido em `bff9915`** — não são bugs de slider.',
+    '- `transmission-scale` no custom: N/A, não bug.',
+    '- Remaining DEAD/WEAK rows (if any) are real product gaps.',
     '',
   )
 
   fs.mkdirSync(path.dirname(outFile), { recursive: true })
   fs.writeFileSync(outFile, lines.join('\n'))
+  // drop stale after-named file if present
+  const stale = path.join(root, 'docs', 'slider-audit-after.md')
+  if (fs.existsSync(stale)) fs.unlinkSync(stale)
   console.log('wrote', outFile)
 }
 

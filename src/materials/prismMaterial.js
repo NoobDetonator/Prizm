@@ -264,7 +264,7 @@ export function createPrismMaterial({
 
         // Linear radiance scale only — NOT tone mapping, NOT clamp.
         // Keeps typical crystal body in a sensible range while highlights stay >1
-        // so bloom/glare extract (OutputPass owns ACES).
+        // so bloom can extract (OutputPass owns ACES).
         lit *= 0.28;
 
         gl_FragColor = vec4(lit, 1.0);

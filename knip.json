@@ -7,6 +7,5 @@
     "scripts/*.mjs"
   ],
   "project": ["src/**/*.js", "scripts/**/*.mjs"],
-  "ignoreExportsUsedInFile": true,
-  "ignoreBinaries": ["knip"]
+  "ignoreExportsUsedInFile": true
 }

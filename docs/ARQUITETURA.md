@@ -4,46 +4,49 @@
 
 | Path | Role |
 | --- | --- |
-| `index.html` + `src/main.js` | Full demo (streetwear, post stack, UI) |
+| `index.html` + `src/demo/main.js` | Full demo (streetwear, post stack, UI) |
 | `src/lib/prizm/index.js` | Public library surface |
 | `examples/*.html` | Minimal consumers of `createPrism` |
 
 ## Library (`src/lib/prizm`)
 
 ```
-createPrism({ renderer, engine, preset, shells })
-  ├─ attach(mesh)      replace material, add rim/caustic shells
-  ├─ beforeRender(...) custom: capture scene → refraction RT
-  ├─ setParams / update / dispose
+createPrism({ renderer, engine, preset, shells, stage })
+  ├─ attach(mesh)      replace material, add rim shells
+  ├─ beforeRender(...) custom: backface + refraction plate
+  ├─ setParams / update / detach / dispose
   └─ engines
-       ├─ custom   → materials/prismMaterial.js + createRefractionCapture
+       ├─ custom   → materials/prismMaterial.js + captures
        └─ physical → materials/physicalGlass.js (MeshPhysicalMaterial)
 ```
 
 Supporting:
 
-- `estimateThickness` / `createThicknessHintMap` — scalar / hint map from bounds
-- `createRefractionCapture` — half-res scene plate for screen-space bend
-- Env helpers re-exported: `createPrismEnvironment`, artistic LDR, HDR
+- `createPrismStage` — shared refraction plate for multiple custom instances
+- `estimateThicknessFromBounds` — AABB heuristic
+- `createBackfaceCapture` / `createRefractionCapture`
+- Env helpers re-exported: procedural float HDR, artistic plates, HDR loader
 
 ## Demo render path
 
 ```
-Scene (streetwear opaque + physical glass cube + additive rims/caustics)
+Scene (streetwear opaque + glass cube + additive rims)
   → EffectComposer
       RenderPass → SavePass (clean)
       Afterimage / Halftone / Chroma (destructive, cube-bound later)
       SelectiveCubeComposite (restore backdrop outside mask)
       ASCII (cube mask)
-      Bloom / Glare / Flare (extract masked, composite full-frame)
+      Bloom (extract masked, composite full-frame)
       DoF → FilmGrade → Output
 ```
 
 Mask: camera **layer 1** on prism meshes; `createCubeMaskRenderer` half-res MSAA.
 
+Glare / LensFlare passes were removed (`bff9915`) — not part of the stack anymore.
+
 ## Why two glass engines
 
-Three’s transmission buffer only includes **opaque** objects. Additive caustic blades never enter it. The custom engine avoids that by (1) capturing the opaque plate itself and (2) injecting caustics inside the fragment. The demo stays on physical transmission because the post-FX stack and streetwear look were tuned against that path.
+Three’s transmission buffer only includes **opaque** objects. The custom engine captures an opaque plate and bends UVs in the fragment; the demo defaults to physical transmission because the post-FX stack and streetwear look were tuned against that path. Panel toggle exercises both.
 
 ## Folders
 
@@ -51,9 +54,9 @@ Three’s transmission buffer only includes **opaque** objects. Additive caustic
 src/
   lib/prizm/     reusable API
   materials/     physicalGlass, prismMaterial, rim shaders
+  demo/          panel, boot, scene, post wiring
   post/          composer passes
   env/           HDR / artistic / procedural IBL
   backdrop/      streetwear canvases (opacity painted into pixels)
-  effects/       additive caustic blades (physical demo)
   textures/      procedural crystal maps
 ```

@@ -168,7 +168,19 @@ export function createUiController(ctx) {
 
     renderer.toneMappingExposure = values.exposure
     renderer.toneMapping = TONE_MAP[values.tonemap] ?? THREE.ACESFilmicToneMapping
-    renderer.transmissionResolutionScale = values.transmissionScale
+    // transmissionResolutionScale only affects MeshPhysicalMaterial.transmission
+    const transmissionApplicable = libPrism.engine === 'physical'
+    if (ui.transmissionScale) {
+      ui.transmissionScale.disabled = !transmissionApplicable
+      const wrap = ui.transmissionScale.closest('label')
+      if (wrap) wrap.style.opacity = transmissionApplicable ? '' : '0.45'
+      ui.transmissionScale.title = transmissionApplicable
+        ? ''
+        : 'N/A no engine custom (só MeshPhysicalMaterial.transmission)'
+    }
+    if (transmissionApplicable) {
+      renderer.transmissionResolutionScale = values.transmissionScale
+    }
     scene.environmentIntensity = values.envIntensity
 
     const nextDprCap = THREE.MathUtils.clamp(values.dpr, 1, 2)
