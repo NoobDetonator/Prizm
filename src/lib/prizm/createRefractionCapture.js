@@ -7,14 +7,15 @@ export function createRefractionCapture({
   scale = 0.5,
   type = THREE.HalfFloatType,
 } = {}) {
+  // Mip chain so the custom shader can blur refraction by roughness (texture2D bias / lod).
   const rt = new THREE.WebGLRenderTarget(4, 4, {
     type,
-    minFilter: THREE.LinearFilter,
+    minFilter: THREE.LinearMipmapLinearFilter,
     magFilter: THREE.LinearFilter,
     depthBuffer: true,
     stencilBuffer: false,
   })
-  rt.texture.generateMipmaps = false
+  rt.texture.generateMipmaps = true
 
   let width = 4
   let height = 4

@@ -85,8 +85,10 @@ renderer.render(scene, camera)
 
 | Engine | What it is | Needs `beforeRender` |
 | --- | --- | --- |
-| `custom` (default) | Double-refract + spectral RGB + in-shader caustics | Yes |
-| `physical` | `MeshPhysicalMaterial.transmission` | No |
+| `custom` (lib default) | Double-refract screen-space with **backface exit normals** + per-channel IOR (numeric proof: `npm test`) + in-shader caustics | Yes (`prism.beforeRender` or `stage.beforeRender`) |
+| `physical` (demo default) | `MeshPhysicalMaterial.transmission` | No |
+
+Multi-instance: pass a shared `createPrismStage({ renderer })` so all custom prisms share **one** refraction plate per frame.
 
 Procedural presets: `spectral`, `midnight`, `tungsten`, `disco`, `overcast`, `aurora`  
 Artistic presets: `gradientStudio`, `neonAlley`, `paperSky`, `emberHall`, `iceRink`
@@ -105,12 +107,13 @@ Desktop defaults to **high** IBL (4096×2048 float equirect → sharper PMREM sp
 
 | Phenomenon | Nature | In Prizm |
 | --- | --- | --- |
-| Refraction (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | Custom: entry+exit `refract()`; physical: `ior` |
-| Dispersion | \(n(\lambda)\) | Custom: per-channel IOR; physical: `dispersion` |
-| Double refraction | Ray bends in **and** out | Custom approx. with \(-N\) + thickness |
+| Refraction (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | Custom: entry+exit `refract()` with captured exit normal; physical: `ior` |
+| Dispersion | \(n(\lambda)\) | Custom: per-channel IOR (requires non-parallel faces — see `scripts/test-dispersion.mjs`); physical: `dispersion` |
+| Double refraction | Ray bends in **and** out | Custom: entry normal + backface exit normal + thickness path |
 | Absorption | Beer–Lambert | attenuation color / distance |
-| Interior caustics | Focused refracted light | Custom: in-shader; demo physical: additive blades |
+| Interior caustics | Focused refracted light | Custom: in-shader; physical demo: additive blades |
 | IBL | HDR environment | Procedural float recipes + artistic canvas plates |
+| Roughness blur | Microfacet smear | Custom: mip bias + direction jitter on plate/env (approx.) |
 
 Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\approx1.85\) (art-directed).
 
@@ -119,8 +122,21 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 - `docs/preview/` — README gallery shots
 - `docs/ARQUITETURA.md` — pipeline map
 - `docs/DEBITO-TECNICO.md` — known fakes
-- `docs/CHECKLIST.md` — phase checklist
+- `docs/CHECKLIST.md` — phase checklist (items need proof links)
+- `docs/slider-audit-after.md` — slider MAD after Plano V2
+- `docs/leak-test.md` — dispose leak gate
+- `docs/matrix/` — look × material × engine captures
+
+## Tests
+
+```bash
+npm test                 # dispersion numeric gate (D3)
+npm run test:leak        # 50× create/attach/dispose (needs Vite + Chrome)
+npm run audit:sliders    # rewrite slider-audit-after.md
+npm run capture:matrix   # 42 PNGs → docs/matrix/
+```
 
 ## Rules
 
 No `V2` / `New` / `Final` filenames. Edit in place; delete what you replace. No new dependencies without approval.
+No optical feature is “done” without a numeric test. Do not present SwiftShader fps as GPU results.

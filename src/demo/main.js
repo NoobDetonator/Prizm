@@ -149,6 +149,7 @@ bootDemo({
     readUi,
     setVoidMode,
     switchEnvironment,
+    switchEngine,
     setEnvQuality: (q) => env.setEnvQuality(q),
     lockCamera,
   }),

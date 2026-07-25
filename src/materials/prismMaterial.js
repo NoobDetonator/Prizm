@@ -116,9 +116,34 @@ export function createPrismMaterial({
         return vec2(u, v);
       }
 
-      vec3 sampleEnv(vec3 dir) {
+      // Cheap hash for roughness jitter (stable per-fragment, not temporal).
+      float hash12(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+
+      vec3 jitterDir(vec3 dir, float amount, float seed) {
+        if (amount < 1e-4) return dir;
+        vec3 n = normalize(dir);
+        vec3 t = abs(n.y) < 0.99 ? normalize(cross(n, vec3(0.0, 1.0, 0.0))) : vec3(1.0, 0.0, 0.0);
+        vec3 b = cross(n, t);
+        float u = hash12(gl_FragCoord.xy + seed) * 6.2831853;
+        float v = hash12(gl_FragCoord.xy * 1.37 + seed + 17.0);
+        float r = amount * sqrt(v);
+        return normalize(n + (cos(u) * t + sin(u) * b) * r);
+      }
+
+      vec3 sampleEnv(vec3 dir, float rough) {
         if (hasEnvMap < 0.5) return vec3(0.02, 0.03, 0.05);
-        return texture2D(envMap, equirectUv(dir)).rgb * envMapIntensity;
+        // Bias ≈ mip: frosted glass samples a blurrier equirect lobe.
+        float bias = rough * rough * 8.0;
+        return texture2D(envMap, equirectUv(dir), bias).rgb * envMapIntensity;
+      }
+
+      vec3 sampleRefraction(vec2 uv, float rough) {
+        float bias = rough * rough * 6.0;
+        return texture2D(tRefraction, uv, bias).rgb;
       }
 
       vec3 refractSpectral(vec3 I, vec3 N, float eta) {
@@ -199,9 +224,10 @@ export function createPrismMaterial({
         float iorB = max(1.01, ior + disp * 1.15);
 
         vec3 I = normalize(-V);
-        vec3 T1R = refractSpectral(I, N, 1.0 / iorR);
-        vec3 T1G = refractSpectral(I, N, 1.0 / iorG);
-        vec3 T1B = refractSpectral(I, N, 1.0 / iorB);
+        float jitterAmt = rough * 0.35;
+        vec3 T1R = jitterDir(refractSpectral(I, N, 1.0 / iorR), jitterAmt, 1.1);
+        vec3 T1G = jitterDir(refractSpectral(I, N, 1.0 / iorG), jitterAmt, 2.3);
+        vec3 T1B = jitterDir(refractSpectral(I, N, 1.0 / iorB), jitterAmt, 3.7);
 
         float path = thickness / max(cosTheta, 0.2);
 
@@ -209,31 +235,32 @@ export function createPrismMaterial({
         // GLSL refract expects N pointing toward the incident side; for exit from glass→air
         // the interface normal should point into the glass (opposite outward exitN).
         vec3 nOut = -exitN;
-        vec3 T2R = refractSpectral(T1R, nOut, iorR);
-        vec3 T2G = refractSpectral(T1G, nOut, iorG);
-        vec3 T2B = refractSpectral(T1B, nOut, iorB);
+        vec3 T2R = jitterDir(refractSpectral(T1R, nOut, iorR), jitterAmt * 0.5, 4.1);
+        vec3 T2G = jitterDir(refractSpectral(T1G, nOut, iorG), jitterAmt * 0.5, 5.2);
+        vec3 T2B = jitterDir(refractSpectral(T1B, nOut, iorB), jitterAmt * 0.5, 6.3);
 
         vec3 transmitted;
         if (hasRefraction > 0.5) {
           // Per-channel screen lookup at projected exit footprints (T1 path differs by IOR).
-          float r = texture2D(tRefraction, exitScreenUV(vWorldPos, T1R, path)).r;
-          float g = texture2D(tRefraction, exitScreenUV(vWorldPos, T1G, path)).g;
-          float b = texture2D(tRefraction, exitScreenUV(vWorldPos, T1B, path)).b;
+          // Mip bias follows roughness so frosted glass softens the plate.
+          float r = sampleRefraction(exitScreenUV(vWorldPos, T1R, path), rough).r;
+          float g = sampleRefraction(exitScreenUV(vWorldPos, T1G, path), rough).g;
+          float b = sampleRefraction(exitScreenUV(vWorldPos, T1B, path), rough).b;
           transmitted = vec3(r, g, b);
         } else {
           transmitted = vec3(
-            sampleEnv(T2R).r,
-            sampleEnv(T2G).g,
-            sampleEnv(T2B).b
+            sampleEnv(T2R, rough).r,
+            sampleEnv(T2G, rough).g,
+            sampleEnv(T2B, rough).b
           );
         }
 
         if (hasEnvMap > 0.5) {
-          vec3 envT = vec3(sampleEnv(T2R).r, sampleEnv(T2G).g, sampleEnv(T2B).b);
+          vec3 envT = vec3(sampleEnv(T2R, rough).r, sampleEnv(T2G, rough).g, sampleEnv(T2B, rough).b);
           transmitted = mix(transmitted, envT, 0.22 + translucency * 0.15);
         }
 
-        vec3 reflected = sampleEnv(reflect(I, N));
+        vec3 reflected = sampleEnv(reflect(I, N), rough);
 
         float attenDist = max(attenuationDistance, 0.05);
         vec3 absorb = -log(max(attenuationColor, vec3(0.05))) / attenDist;
@@ -250,7 +277,11 @@ export function createPrismMaterial({
         vec3 lit = mix(transmitted, reflected, fresnel);
         lit = mix(lit, mix(lit, attenuationColor, 0.35), translucency * 0.5);
 
-        // Linear HDR — NO ACES / clamp here. OutputPass owns tone mapping.
+        // Linear radiance scale only — NOT tone mapping, NOT clamp.
+        // Keeps typical crystal body in a sensible range while highlights stay >1
+        // so bloom/glare extract (OutputPass owns ACES).
+        lit *= 0.28;
+
         gl_FragColor = vec4(lit, 1.0);
       }
     `,

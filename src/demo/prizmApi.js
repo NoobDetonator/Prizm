@@ -1,5 +1,6 @@
+import * as THREE from 'three'
 import { LOOK_PRESETS, applyLookPreset } from '../post/lookPresets.js'
-import { MATERIAL_PRESETS } from '../lib/prizm/index.js'
+import { MATERIAL_PRESETS, createPrism } from '../lib/prizm/index.js'
 import { captureDataURL, capturePixels, exportRender, sampleRenderStats } from './exportRender.js'
 import { findPrismShells } from './panel.js'
 
@@ -26,6 +27,7 @@ export function createPrizmApi(ctx) {
     readUi,
     setVoidMode,
     switchEnvironment,
+    switchEngine,
     setEnvQuality,
     lockCamera,
   } = ctx
@@ -113,6 +115,15 @@ export function createPrizmApi(ctx) {
     get voidMode() {
       return voidModeRef.value
     },
+    async setEngine(engine) {
+      if (ui.engine) ui.engine.value = engine
+      await switchEngine(engine)
+      applyUi()
+      return getLibPrism().engine
+    },
+    get engine() {
+      return getLibPrism().engine
+    },
     async setEnvironment(kind) {
       if (ui.envSource) ui.envSource.value = kind
       await switchEnvironment(kind)
@@ -153,6 +164,60 @@ export function createPrizmApi(ctx) {
     captureDataURL: (scale, opts) => captureDataURL(exportCtx, scale, opts),
     capturePixels: (scale) => capturePixels(exportCtx, scale),
     sampleRenderStats: () => sampleRenderStats(exportCtx),
+    /**
+     * D2 — N× createPrism → attach → detach → dispose on a throwaway mesh.
+     * Does not touch the demo hero prism.
+     */
+    async runLeakTest(cycles = 50) {
+      const snap = () => ({
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+      })
+
+      const warm = () => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+        scene.add(mesh)
+        const p = createPrism({ renderer, engine: 'custom', preset: 'crystal' })
+        p.attach(mesh)
+        p.beforeRender(renderer, scene, camera)
+        p.dispose()
+        scene.remove(mesh)
+        mesh.geometry.dispose()
+      }
+      warm()
+      await new Promise((r) => requestAnimationFrame(() => r()))
+
+      const before = snap()
+      for (let i = 0; i < cycles; i++) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8))
+        scene.add(mesh)
+        const engine = i % 2 === 0 ? 'custom' : 'physical'
+        const p = createPrism({ renderer, engine, preset: 'glass' })
+        p.attach(mesh)
+        if (p.engine === 'custom') p.beforeRender(renderer, scene, camera)
+        const original = mesh.userData._prizmOriginalMaterial
+        p.detach()
+        if (mesh.material !== original) {
+          return { ok: false, reason: 'detach did not restore original material', before, after: snap(), cycle: i }
+        }
+        p.dispose()
+        scene.remove(mesh)
+        mesh.geometry.dispose()
+        original?.dispose?.()
+      }
+      await new Promise((r) => requestAnimationFrame(() => r()))
+      const after = snap()
+      const deltaGeo = after.geometries - before.geometries
+      const deltaTex = after.textures - before.textures
+      return {
+        ok: deltaGeo === 0 && deltaTex === 0,
+        before,
+        after,
+        deltaGeo,
+        deltaTex,
+        cycles,
+      }
+    },
     stats: {
       frameMs: 0,
       fps: 0,

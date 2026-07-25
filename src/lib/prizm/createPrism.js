@@ -21,7 +21,8 @@ import { estimateThicknessFromBounds } from './estimateThickness.js'
  * Zero DOM. Multiple instances are safe (all state is closed over).
  *
  * Engines:
- * - `custom` — double-refract + spectral RGB with backface exit normals. Call beforeRender.
+ * - `custom` — double-refract screen-space with backface exit normals + per-channel IOR.
+ *   Call `beforeRender` (or pass `{ stage }` and call `stage.beforeRender`).
  * - `physical` — Three MeshPhysicalMaterial.transmission.
  */
 export function createPrism({

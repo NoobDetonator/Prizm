@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "test": "node scripts/test-dispersion.mjs",
     "test:dispersion": "node scripts/test-dispersion.mjs",
+    "test:leak": "node scripts/leak-test.mjs",
+    "audit:sliders": "node scripts/slider-audit-after.mjs",
     "capture:previews": "node scripts/capture-previews.mjs",
+    "capture:matrix": "node scripts/capture-matrix.mjs",
     "lint:dead": "node -e \"console.log('Run: npx knip (optional). Rule: no V2/New/Final suffixes; delete replaced files in the same commit.')\""
   },
   "dependencies": {
