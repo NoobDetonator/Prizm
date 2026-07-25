@@ -22,8 +22,6 @@ export function collectUi() {
     roughness: document.querySelector('#roughness'),
     translucency: document.querySelector('#translucency'),
     bloom: document.querySelector('#bloom'),
-    glare: document.querySelector('#glare'),
-    flare: document.querySelector('#flare'),
     dof: document.querySelector('#dof'),
     dofFocus: document.querySelector('#dof-focus'),
     afterimage: document.querySelector('#afterimage'),
@@ -41,7 +39,6 @@ export function collectUi() {
     transmissionScale: document.querySelector('#transmission-scale'),
     tonemap: document.querySelector('#tonemap'),
     speckle: document.querySelector('#speckle'),
-    caustics: document.querySelector('#caustics'),
     export: document.querySelector('#export-render'),
     note: document.querySelector('#preset-note'),
     values: Object.fromEntries(
@@ -71,8 +68,6 @@ export function readUi(ui) {
     roughness: Number(ui.roughness.value),
     translucency: Number(ui.translucency.value),
     bloom: Number(ui.bloom.value),
-    glare: Number(ui.glare.value),
-    flare: Number(ui.flare.value),
     dof: Number(ui.dof.value),
     dofFocus: Number(ui.dofFocus.value),
     afterimage: Number(ui.afterimage.value),
@@ -89,7 +84,6 @@ export function readUi(ui) {
     transmissionScale: Number(ui.transmissionScale.value),
     tonemap: ui.tonemap.value,
     speckle: Number(ui.speckle.value),
-    caustics: Number(ui.caustics.value),
   }
 }
 
@@ -111,8 +105,6 @@ export function createUiController(ctx) {
   const { ui, getLibPrism, getVoidMode, surfaceDetails, post, scene, renderer, maxDprCapRef, onResize } = ctx
   const {
     bloomPass,
-    glarePass,
-    flarePass,
     dofPass,
     afterimagePass,
     halftonePass,
@@ -135,7 +127,6 @@ export function createUiController(ctx) {
       roughness: values.roughness,
       translucency: values.translucency,
       speckle: values.speckle,
-      caustics: values.caustics,
       bloom: values.bloom,
     })
 
@@ -150,14 +141,7 @@ export function createUiController(ctx) {
     bloomPass.setStrength(values.bloom * 1.15)
     bloomPass.setRadius(THREE.MathUtils.lerp(0.55, 1.15, Math.min(values.bloom, 1.5) / 1.5))
     bloomPass.setThreshold(THREE.MathUtils.lerp(0.78, 0.58, Math.min(values.bloom, 1.5) / 1.5))
-    bloomPass.enabled = values.bloom > 0.01
-
-    glarePass.setStrength(values.glare)
-    glarePass.enabled = values.glare > 0.01
-    glarePass.setStretch(0.9 + values.glare * 1.1)
-
-    flarePass.setStrength(values.flare)
-    flarePass.enabled = values.flare > 0.01
+    bloomPass.enabled = values.bloom > 0.005
 
     dofPass.setFocus(values.dofFocus)
     dofPass.setStrength(values.dof)
@@ -174,8 +158,6 @@ export function createUiController(ctx) {
     asciiPass.enabled = values.ascii > 0.01
 
     bloomPass.setMaskTexture(cubeMask.texture)
-    glarePass.setMaskTexture(cubeMask.texture)
-    flarePass.setMaskTexture(cubeMask.texture)
 
     chromaPass.uniforms.intensity.value = values.chroma
     chromaPass.uniforms.amount.value = 0.0004 + values.chroma * 0.0018
@@ -201,8 +183,6 @@ export function createUiController(ctx) {
     setValueLabel(ui, 'roughness', values.roughness.toFixed(3))
     setValueLabel(ui, 'translucency', values.translucency.toFixed(2))
     setValueLabel(ui, 'bloom', values.bloom.toFixed(2))
-    setValueLabel(ui, 'glare', values.glare.toFixed(2))
-    setValueLabel(ui, 'flare', values.flare.toFixed(2))
     setValueLabel(ui, 'dof', values.dof.toFixed(2))
     setValueLabel(ui, 'dof-focus', values.dofFocus.toFixed(2))
     setValueLabel(ui, 'afterimage', values.afterimage.toFixed(2))
@@ -217,7 +197,6 @@ export function createUiController(ctx) {
     setValueLabel(ui, 'dpr', values.dpr.toFixed(2))
     setValueLabel(ui, 'transmission-scale', values.transmissionScale.toFixed(2))
     setValueLabel(ui, 'speckle', values.speckle.toFixed(2))
-    setValueLabel(ui, 'caustics', values.caustics.toFixed(2))
   }
 
   function bindUi(handlers) {
@@ -287,8 +266,6 @@ export function createUiController(ctx) {
       ui.roughness,
       ui.translucency,
       ui.bloom,
-      ui.glare,
-      ui.flare,
       ui.dof,
       ui.dofFocus,
       ui.afterimage,
@@ -303,7 +280,6 @@ export function createUiController(ctx) {
       ui.dpr,
       ui.transmissionScale,
       ui.speckle,
-      ui.caustics,
     ]
 
     for (const element of sliders) {
@@ -345,7 +321,6 @@ export function findPrismShells(host) {
   return {
     interiorRim: shells?.getObjectByName('prizm-inner-rim') ?? null,
     rim: shells?.getObjectByName('prizm-outer-rim') ?? null,
-    caustics: shells?.getObjectByName('internal-caustics') ?? null,
     interiorRimMaterial: shells?.getObjectByName('prizm-inner-rim')?.material ?? null,
     rimMaterial: shells?.getObjectByName('prizm-outer-rim')?.material ?? null,
   }

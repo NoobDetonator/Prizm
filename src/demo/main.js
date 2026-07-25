@@ -47,7 +47,7 @@ scene.add(hero)
 const streetwear = createStreetwear(scene)
 const { studioLights, studioLightBase } = createStudioLights(scene)
 const post = createPostStack({ renderer, scene, camera, maskLayer: MASK_LAYER })
-const { composer, renderPass, filmGradePass, glarePass } = post
+const { composer, renderPass, filmGradePass } = post
 
 const voidCtx = { scene, renderer, renderPass, streetwear, studioLights, studioLightBase, voidModeRef }
 const setVoidMode = (enabled) => applyVoidMode(voidCtx, enabled)
@@ -157,7 +157,6 @@ bootDemo({
     hero,
     autoSpinRef,
     filmGradePass,
-    glarePass,
     libPrismRef: getLibPrism,
     streetwear,
     controls,

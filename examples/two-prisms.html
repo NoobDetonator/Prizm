@@ -49,7 +49,7 @@
       const prismB = createPrism({ renderer, preset: 'glass', engine: 'custom', stage })
       prismA.attach(a)
       prismB.attach(b)
-      prismB.setParams({ dispersion: 0.8, caustics: 0.2 })
+      prismB.setParams({ dispersion: 0.8 })
 
       addEventListener('resize', () => {
         camera.aspect = innerWidth / innerHeight

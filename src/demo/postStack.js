@@ -7,8 +7,6 @@ import { SavePass } from 'three/addons/postprocessing/SavePass.js'
 import { ChromaShader } from '../post/ChromaShader.js'
 import { FilmGradeShader } from '../post/FilmGradeShader.js'
 import { QualityBloomPass } from '../post/QualityBloomPass.js'
-import { GlarePass } from '../post/GlarePass.js'
-import { LensFlarePass } from '../post/LensFlarePass.js'
 import { AsciiPass } from '../post/AsciiPass.js'
 import { DepthOfFieldPass } from '../post/DepthOfFieldPass.js'
 import { HalftoneStylePass } from '../post/HalftoneStylePass.js'
@@ -56,17 +54,9 @@ export function createPostStack({ renderer, scene, camera, maskLayer }) {
   asciiPass.setMaskTexture(cubeMask.texture)
   composer.addPass(asciiPass)
 
-  const bloomPass = new QualityBloomPass(0.55, 0.9, 0.68)
+  const bloomPass = new QualityBloomPass(0.02, 0.9, 0.68)
   bloomPass.setMaskTexture(cubeMask.texture)
   composer.addPass(bloomPass)
-
-  const glarePass = new GlarePass({ strength: 0.35, threshold: 0.7, stretch: 1.55, angle: 0.08 })
-  glarePass.setMaskTexture(cubeMask.texture)
-  composer.addPass(glarePass)
-
-  const flarePass = new LensFlarePass({ strength: 0.25, threshold: 0.8, ghosts: 6, haloWidth: 0.4 })
-  flarePass.setMaskTexture(cubeMask.texture)
-  composer.addPass(flarePass)
 
   const dofPass = new DepthOfFieldPass(scene, camera, {
     focus: 4.8,
@@ -89,8 +79,6 @@ export function createPostStack({ renderer, scene, camera, maskLayer }) {
     asciiPass.setMaskTexture(cubeMask.texture)
     asciiPass.setSize(width * dpr, height * dpr)
     bloomPass.setMaskTexture(cubeMask.texture)
-    glarePass.setMaskTexture(cubeMask.texture)
-    flarePass.setMaskTexture(cubeMask.texture)
   }
 
   function resize(width, height, dpr) {
@@ -106,8 +94,6 @@ export function createPostStack({ renderer, scene, camera, maskLayer }) {
     selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
     asciiPass.setMaskTexture(cubeMask.texture)
     bloomPass.setMaskTexture(cubeMask.texture)
-    glarePass.setMaskTexture(cubeMask.texture)
-    flarePass.setMaskTexture(cubeMask.texture)
   }
 
   return {
@@ -121,8 +107,6 @@ export function createPostStack({ renderer, scene, camera, maskLayer }) {
     selectivePass,
     asciiPass,
     bloomPass,
-    glarePass,
-    flarePass,
     dofPass,
     filmGradePass,
     resize,

@@ -21,8 +21,8 @@ const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 const MAD_DEAD = 0.15
 
 const sliders = [
-  'dispersion', 'thickness', 'ior', 'roughness', 'translucency', 'speckle', 'caustics',
-  'bloom', 'glare', 'flare', 'dof', 'dof-focus', 'afterimage', 'halftone', 'ascii', 'ascii-cell',
+  'dispersion', 'thickness', 'ior', 'roughness', 'translucency', 'speckle',
+  'bloom', 'dof', 'dof-focus', 'afterimage', 'halftone', 'ascii', 'ascii-cell',
   'chroma', 'vignette', 'grain', 'exposure', 'dpr', 'transmission-scale',
 ]
 

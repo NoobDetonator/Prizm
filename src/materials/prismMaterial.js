@@ -9,7 +9,7 @@ import { MATERIAL_PRESETS } from './physicalGlass.js'
  *  2. Entry refraction with per-channel IOR (dispersion).
  *  3. Exit refraction using captured backface world-normal (not -N).
  *  4. Sample scene RT / env via NDC-projected exit points (per channel).
- *  5. Beer–Lambert + procedural caustics.
+ *  5. Beer–Lambert attenuation.
  *
  * Output is **linear, unclamped** — tone mapping belongs to EffectComposer OutputPass.
  *
@@ -42,8 +42,6 @@ export function createPrismMaterial({
       attenuationColor: { value: new THREE.Color(p.attenuationColor) },
       attenuationDistance: { value: p.attenuationDistance },
       translucency: { value: 0.08 },
-      causticsIntensity: { value: 0.45 },
-      causticsTime: { value: 0 },
       map: { value: map },
       roughnessMap: { value: roughnessMap },
       normalMap: { value: normalMap },
@@ -89,8 +87,6 @@ export function createPrismMaterial({
       uniform vec3 attenuationColor;
       uniform float attenuationDistance;
       uniform float translucency;
-      uniform float causticsIntensity;
-      uniform float causticsTime;
       uniform sampler2D map;
       uniform sampler2D roughnessMap;
       uniform sampler2D normalMap;
@@ -168,16 +164,6 @@ export function createPrismMaterial({
         vec3 exitPos = entryPos + T1 * path;
         vec3 beyond = exitPos + T2 * (path * 0.22);
         return projectToScreenUV(beyond);
-      }
-
-      vec3 proceduralCaustics(vec3 wp, float t) {
-        float w1 = sin(wp.x * 7.2 + t * 1.3) * cos(wp.y * 5.1 - t * 0.9);
-        float w2 = sin(wp.z * 6.4 - t * 1.1 + wp.x * 2.0);
-        float band = smoothstep(0.55, 0.95, abs(w1)) * smoothstep(0.4, 0.9, abs(w2));
-        vec3 cool = vec3(0.15, 0.75, 1.0);
-        vec3 warm = vec3(1.0, 0.35, 0.12);
-        float side = clamp(wp.x * 0.5 + 0.5, 0.0, 1.0);
-        return mix(cool, warm, side) * band * (0.55 + 0.45 * sin(t * 2.0 + wp.y * 3.0));
       }
 
       void main() {
@@ -273,9 +259,6 @@ export function createPrismMaterial({
           transmitted *= texture2D(map, vUv).rgb;
         }
 
-        vec3 caustics = proceduralCaustics(vWorldPos, causticsTime) * causticsIntensity;
-        transmitted += caustics * beer;
-
         vec3 lit = mix(transmitted, reflected, fresnel);
         lit = mix(lit, mix(lit, attenuationColor, 0.35), translucency * 0.5);
 
@@ -326,8 +309,6 @@ export function applyPrismMaterialParams(material, params = {}) {
   if (params.thickness != null) u.thickness.value = params.thickness
   if (params.roughness != null) u.roughness.value = params.roughness
   if (params.translucency != null) u.translucency.value = params.translucency
-  if (params.caustics != null) u.causticsIntensity.value = params.caustics
-  if (params.causticsTime != null) u.causticsTime.value = params.causticsTime
   if (params.envMapIntensity != null) u.envMapIntensity.value = params.envMapIntensity
 
   if (params.presetKey && MATERIAL_PRESETS[params.presetKey]) {

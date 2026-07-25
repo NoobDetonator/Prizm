@@ -3,7 +3,6 @@ export function startAnimationLoop(ctx) {
     hero,
     autoSpinRef,
     filmGradePass,
-    glarePass,
     libPrismRef,
     streetwear,
     controls,
@@ -36,7 +35,6 @@ export function startAnimationLoop(ctx) {
     const libPrism = libPrismRef()
     if (autoSpinRef.value) hero.rotation.y += delta * 0.035
     filmGradePass.uniforms.time.value = now * 0.001
-    glarePass.setAngle(0.08 + Math.sin(now * 0.00015) * 0.04)
     libPrism.update(now * 0.001)
     streetwear.userData.update(now * 0.001)
     controls.update()

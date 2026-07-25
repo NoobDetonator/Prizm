@@ -11,8 +11,6 @@ export async function exportRender(ctx, scale = 2) {
     cleanSavePass,
     asciiPass,
     bloomPass,
-    glarePass,
-    flarePass,
     ui,
     onResize,
   } = ctx
@@ -41,8 +39,6 @@ export async function exportRender(ctx, scale = 2) {
     selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
     asciiPass.setMaskTexture(cubeMask.texture)
     bloomPass.setMaskTexture(cubeMask.texture)
-    glarePass.setMaskTexture(cubeMask.texture)
-    flarePass.setMaskTexture(cubeMask.texture)
     asciiPass.setSize(width, height)
     composer.render()
 
@@ -76,8 +72,6 @@ export async function captureDataURL(ctx, scale = 1, { restore = true } = {}) {
     cleanSavePass,
     asciiPass,
     bloomPass,
-    glarePass,
-    flarePass,
     canvas,
     onResize,
   } = ctx
@@ -98,8 +92,6 @@ export async function captureDataURL(ctx, scale = 1, { restore = true } = {}) {
   selectivePass.setCleanTexture(cleanSavePass.renderTarget.texture)
   asciiPass.setMaskTexture(cubeMask.texture)
   bloomPass.setMaskTexture(cubeMask.texture)
-  glarePass.setMaskTexture(cubeMask.texture)
-  flarePass.setMaskTexture(cubeMask.texture)
   asciiPass.setSize(width, height)
   composer.render()
   const dataURL = canvas.toDataURL('image/png')

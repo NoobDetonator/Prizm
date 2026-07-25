@@ -43,7 +43,7 @@
       wall.position.z = -3.2
       scene.add(wall)
 
-      const prism = createPrism({ renderer, preset: 'flint', shells: { outerRim: true, innerRim: true, caustics: false } })
+      const prism = createPrism({ renderer, preset: 'flint', shells: { outerRim: true, innerRim: true } })
       prism.attach(mesh)
       prism.setParams({ dispersion: 1.4, ior: 1.7 })
 

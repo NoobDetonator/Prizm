@@ -11,7 +11,6 @@ import {
 import { createGlassInteriorRimMaterial, applyGlassInteriorRimParams } from '../../materials/glassInteriorRimMaterial.js'
 import { createPrismRimMaterial } from '../../materials/prismRimMaterial.js'
 import { createPrismTexture } from '../../textures/createPrismTexture.js'
-import { createInternalCaustics } from '../../effects/createInternalCaustics.js'
 import { createRefractionCapture } from './createRefractionCapture.js'
 import { createBackfaceCapture } from './createBackfaceCapture.js'
 import { estimateThicknessFromBounds } from './estimateThickness.js'
@@ -41,7 +40,6 @@ export function createPrism({
     outerRim: true,
     innerRim: true,
     surfaceDetail: false,
-    caustics: !useCustom,
     ...(shells || {}),
   }
 
@@ -75,7 +73,6 @@ export function createPrism({
   let interiorMesh = null
   /** @type {THREE.Mesh | null} */
   let rimMesh = null
-  let caustics = null
   let disposed = false
   let thicknessOverridden = false
   let params = {
@@ -86,7 +83,6 @@ export function createPrism({
     roughness: MATERIAL_PRESETS[preset]?.roughness ?? 0.02,
     translucency: 0.08,
     speckle: 0.3,
-    caustics: 0.45,
   }
 
   function attach(mesh) {
@@ -134,16 +130,6 @@ export function createPrism({
       root.add(rimMesh)
     }
 
-    if (shellConfig.caustics) {
-      caustics = createInternalCaustics()
-      const s = radius / 1.2
-      caustics.scale.setScalar(s)
-      caustics.layers.enable(maskLayer)
-      caustics.traverse((o) => o.layers.enable(maskLayer))
-      root.add(caustics)
-      caustics.userData.setIntensity?.(params.caustics)
-    }
-
     syncEnvironment(mesh)
     applyAll()
     return api
@@ -165,11 +151,9 @@ export function createPrism({
       }
       delete host.userData._prizmOriginalMaterial
     }
-    if (caustics?.userData.dispose) caustics.userData.dispose()
     root = null
     interiorMesh = null
     rimMesh = null
-    caustics = null
     host = null
     originalMaterial = null
   }
@@ -197,7 +181,6 @@ export function createPrism({
       applyPhysicalParams(glass, params)
     }
     applyGlassInteriorRimParams(interiorMat, params)
-    if (caustics?.userData.setIntensity) caustics.userData.setIntensity(params.caustics ?? 0)
     if (rimMat.uniforms?.intensity) {
       const bloom = params.bloom ?? 0.55
       rimMat.uniforms.intensity.value = 0.36 + bloom * 0.4 + params.dispersion * 0.065
@@ -254,12 +237,8 @@ export function createPrism({
     glass.userData.setRefractionTexture(tex)
   }
 
-  function update(elapsedTime) {
+  function update(_elapsedTime) {
     if (disposed) return
-    caustics?.userData.update?.(elapsedTime)
-    if (useCustom) {
-      applyPrismMaterialParams(glass, { causticsTime: elapsedTime, caustics: params.caustics })
-    }
   }
 
   function dispose() {

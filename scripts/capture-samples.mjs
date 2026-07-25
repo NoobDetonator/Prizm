@@ -12,7 +12,14 @@ const root = path.resolve(__dirname, '..')
 const outs = [
   path.join(root, 'docs', 'samples'),
   '/opt/cursor/artifacts/prizm-samples',
-]
+].filter((dir) => {
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    return true
+  } catch {
+    return false
+  }
+})
 const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 
 const shots = [
@@ -26,10 +33,19 @@ const shots = [
   { file: '08-void-prism-physical.png', look: 'voidPrism', engine: 'physical', material: 'crystal' },
 ]
 
-for (const dir of outs) fs.mkdirSync(dir, { recursive: true })
+const chromeCandidates = [
+  process.env.CHROME_PATH,
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  '/usr/local/bin/google-chrome',
+  '/usr/bin/google-chrome',
+].filter(Boolean)
+
+const executablePath = chromeCandidates.find((c) => fs.existsSync(c))
+if (!executablePath) throw new Error('Chrome/Chromium not found')
 
 const browser = await puppeteer.launch({
-  executablePath: '/usr/local/bin/google-chrome',
+  executablePath,
   headless: 'new',
   args: [
     '--no-sandbox',

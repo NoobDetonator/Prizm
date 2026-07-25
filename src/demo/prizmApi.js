@@ -36,8 +36,6 @@ export function createPrizmApi(ctx) {
     cubeMask,
     selectivePass,
     bloomPass,
-    glarePass,
-    flarePass,
     dofPass,
     afterimagePass,
     halftonePass,
@@ -74,9 +72,6 @@ export function createPrizmApi(ctx) {
     get rimMaterial() {
       return shells().rimMaterial
     },
-    get caustics() {
-      return shells().caustics
-    },
     get libPrism() {
       return getLibPrism()
     },
@@ -84,8 +79,6 @@ export function createPrizmApi(ctx) {
     cubeMask,
     selectivePass,
     bloomPass,
-    glarePass,
-    flarePass,
     dofPass,
     afterimagePass,
     halftonePass,

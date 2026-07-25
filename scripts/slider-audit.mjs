@@ -15,8 +15,8 @@ const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 const MAD_DEAD = 0.15 // mean abs channel diff; below = effectively dead
 
 const sliders = [
-  'dispersion', 'thickness', 'ior', 'roughness', 'translucency', 'speckle', 'caustics',
-  'bloom', 'glare', 'flare', 'dof', 'dof-focus', 'afterimage', 'halftone', 'ascii', 'ascii-cell',
+  'dispersion', 'thickness', 'ior', 'roughness', 'translucency', 'speckle',
+  'bloom', 'dof', 'dof-focus', 'afterimage', 'halftone', 'ascii', 'ascii-cell',
   'chroma', 'vignette', 'grain', 'exposure', 'dpr', 'transmission-scale',
 ]
 
@@ -118,7 +118,7 @@ async function main() {
     '## Notas',
     '',
     '- `dpr` always changes resolution sampling — expected alive.',
-    '- Effects clipped by selective cube mask may still change *cube* pixels while looking wrong on the full frame (e.g. vignette, glare spill).',
+    '- Effects clipped by selective cube mask may still change *cube* pixels while looking wrong on the full frame (e.g. vignette spill).',
     '- Re-run after Phase 1–2 fixes.',
     '',
   ]
