@@ -16,9 +16,9 @@ Custo: 1 RT + 1 draw do host/frame. Retorno: T2 move a amostra da placa e o lób
 
 Custom: mip bias + jitter (aprox.). Physical: `roughness` + `clearcoatRoughness`. Não é microfacet GGX completo.
 
-## Cáusticas / glare / flare
+## Cáusticas e passes ópticos extras
 
-Removidos do demo em `bff9915` (passes e lâminas internas). Bloom permanece, default baixo.
+Removidos do demo em `bff9915` (lâminas internas + dois passes de extract). Bloom permanece, default baixo.
 
 ## Perf
 
