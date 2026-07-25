@@ -75,7 +75,7 @@ export function createEnvironmentManager({ renderer, scene, ui }) {
       if (!referenceEnvironment) {
         referenceEnvironment = await loadArtisticImageEnvironment(
           renderer,
-          '/assets/prism-environment-reference.png',
+          '/assets/prism-environment-reference.jpg',
           { exposure: 1.7, quality: envQuality, highlightBoost: 5.5 },
         )
       }
