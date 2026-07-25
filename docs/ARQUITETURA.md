@@ -42,8 +42,6 @@ Scene (streetwear opaque + glass cube + additive rims)
 
 Mask: camera **layer 1** on prism meshes; `createCubeMaskRenderer` half-res MSAA.
 
-Glare / LensFlare passes were removed (`bff9915`) — not part of the stack anymore.
-
 ## Why two glass engines
 
 Three’s transmission buffer only includes **opaque** objects. The custom engine captures an opaque plate and bends UVs in the fragment; the demo defaults to physical transmission because the post-FX stack and streetwear look were tuned against that path. Panel toggle exercises both.

@@ -15,7 +15,7 @@ import puppeteer from 'puppeteer-core'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
-const outFile = path.join(root, 'docs', 'slider-audit.md')
+const outFile = '/tmp/prizm-slider-audit.md'
 const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 const MAD_DEAD = 0.15
 
@@ -263,12 +263,9 @@ async function main() {
     '',
   )
 
-  fs.mkdirSync(path.dirname(outFile), { recursive: true })
   fs.writeFileSync(outFile, lines.join('\n'))
-  // drop stale after-named file if present
-  const stale = path.join(root, 'docs', 'slider-audit-after.md')
-  if (fs.existsSync(stale)) fs.unlinkSync(stale)
-  console.log('wrote', outFile)
+  console.log(lines.join('\n'))
+  console.log('wrote', outFile, '(paste into docs/MEDICOES.md when refreshing)')
 }
 
 main().catch((error) => {

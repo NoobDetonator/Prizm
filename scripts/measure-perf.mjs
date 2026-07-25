@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * T0.3 — Measure frame time + renderer.info at DPR 1 and 2.
- * Writes docs/perf-after.md (merged into MEDICOES.md by docs cleanup).
+ * Prints a markdown report (also writes /tmp/prizm-perf.md — not under docs/).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer-core'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
-const outFile = path.join(root, 'docs', 'perf-after.md')
+const outFile = '/tmp/prizm-perf.md'
 const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
 
 const chromeCandidates = [

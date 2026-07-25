@@ -1,6 +1,6 @@
 # Prizm
 
-Three.js optical crystal — reusable prism material for any mesh, plus a streetwear demo with cube-only post-FX.
+Three.js optical crystal — reusable prism for any mesh, plus a streetwear demo with cube-only post-FX.
 
 <p align="center">
   <img src="docs/preview/hero-studio.png" alt="Prizm hero — midnight studio" width="100%" />
@@ -11,62 +11,25 @@ Three.js optical crystal — reusable prism material for any mesh, plus a street
   <img src="docs/preview/hero-neon.png" alt="Neon alley anamorphic" width="49%" />
 </p>
 
-## Run
+## Install & run
 
 ```bash
 npm install
 npm run dev
 ```
 
-- Demo: `index.html` → `src/main.js`
-- Library examples: `/examples/`
-- Regenerate previews: `node scripts/capture-previews.mjs http://127.0.0.1:5173/`
+- Demo: `index.html` → `src/demo/main.js`
+- Library examples: [`examples/`](examples/)
 
-## Looks
-
-| Studio / Midnight | Anamorphic / Disco | Neon ASCII |
-| --- | --- | --- |
-| ![](docs/preview/env-midnight.png) | ![](docs/preview/look-anamorphic.png) | ![](docs/preview/look-neon-ascii.png) |
-
-| Portrait | Print shop | Prism chaos |
-| --- | --- | --- |
-| ![](docs/preview/look-portrait.png) | ![](docs/preview/look-print-shop.png) | ![](docs/preview/look-prism-chaos.png) |
-
-## Environment catalog
-
-Procedural **float HDR** and painted **artistic plates** live in the Environment dropdown.
-
-### Procedural float HDR
-
-| Spectral | Midnight | Tungsten |
-| --- | --- | --- |
-| ![](docs/preview/env-spectral.png) | ![](docs/preview/env-midnight.png) | ![](docs/preview/env-tungsten.png) |
-
-| Disco | Aurora | Overcast |
-| --- | --- | --- |
-| ![](docs/preview/env-disco.png) | ![](docs/preview/env-aurora.png) | ![](docs/preview/env-overcast.png) |
-
-### Artistic plates
-
-| Gradient studio | Neon alley | Paper sky |
-| --- | --- | --- |
-| ![](docs/preview/env-gradient-studio.png) | ![](docs/preview/env-neon-alley.png) | ![](docs/preview/env-paper-sky.png) |
-
-| Ember hall | Ice rink |
-| --- | --- | --- |
-| ![](docs/preview/env-ember-hall.png) | ![](docs/preview/env-ice-rink.png) |
-
-## Library
+## Minimal library use
 
 ```js
 import {
   createPrism,
   createPrismEnvironment,
-  createArtisticEnvironment,
 } from './src/lib/prizm/index.js'
 
 scene.environment = createPrismEnvironment(renderer, 'midnight')
-// or: createArtisticEnvironment(renderer, 'neonAlley')
 
 const prism = createPrism({ renderer, preset: 'crystal', engine: 'custom' })
 prism.attach(mesh)
@@ -85,61 +48,56 @@ renderer.render(scene, camera)
 
 | Engine | What it is | Needs `beforeRender` |
 | --- | --- | --- |
-| `custom` (lib default) | Double-refract screen-space: backface exit normals drive **T2** (env + plate beyond-exit offset) + per-channel IOR; gate: `npm test` (math + shader source) | Yes (`prism.beforeRender` or `stage.beforeRender`) |
+| `custom` (lib default) | Screen-space double-refract + backface exit normals + per-channel IOR | Yes |
 | `physical` (demo default) | `MeshPhysicalMaterial.transmission` | No |
 
-Multi-instance: pass a shared `createPrismStage({ renderer })` so all custom prisms share **one** refraction plate per frame.
+Multi-instance: `createPrismStage({ renderer })` → one shared refraction plate per frame.
 
-Backface pre-pass is kept on purpose (V3.2a): plate UVs combine T1 path displacement with T2 exit direction so exit normals change pixels, not only the 22% env mix.
+## Looks & environments
 
-Procedural presets: `spectral`, `midnight`, `tungsten`, `disco`, `overcast`, `aurora`  
-Artistic presets: `gradientStudio`, `neonAlley`, `paperSky`, `emberHall`, `iceRink`
+| Studio / Midnight | Anamorphic / Disco | Neon ASCII |
+| --- | --- | --- |
+| ![](docs/preview/env-midnight.png) | ![](docs/preview/look-anamorphic.png) | ![](docs/preview/look-neon-ascii.png) |
 
-### Void prism
+| Portrait | Print shop | Prism chaos |
+| --- | --- | --- |
+| ![](docs/preview/look-portrait.png) | ![](docs/preview/look-print-shop.png) | ![](docs/preview/look-prism-chaos.png) |
 
-Look preset **Void prism** (`voidPrism`): transparent canvas clear + `proc:liquidVoid` IBL so the crystal keeps absurd spectral reflections while the page shows through (checkerboard in the UI).
+Procedural float HDR: spectral · midnight · tungsten · disco · aurora · overcast · liquidVoid  
+
+Artistic plates: gradientStudio · neonAlley · paperSky · emberHall · iceRink
+
+| Spectral | Midnight | Tungsten |
+| --- | --- | --- |
+| ![](docs/preview/env-spectral.png) | ![](docs/preview/env-midnight.png) | ![](docs/preview/env-tungsten.png) |
+
+| Disco | Aurora | Overcast |
+| --- | --- | --- |
+| ![](docs/preview/env-disco.png) | ![](docs/preview/env-aurora.png) | ![](docs/preview/env-overcast.png) |
+
+| Gradient studio | Neon alley | Paper sky |
+| --- | --- | --- |
+| ![](docs/preview/env-gradient-studio.png) | ![](docs/preview/env-neon-alley.png) | ![](docs/preview/env-paper-sky.png) |
+
+| Ember hall | Ice rink |
+| --- | --- | --- |
+| ![](docs/preview/env-ember-hall.png) | ![](docs/preview/env-ice-rink.png) |
+
+**Void prism** look: transparent clear + `proc:liquidVoid` IBL.
 
 ![](docs/preview/void-prism-checker.png)
 
-### HDR quality
-
-Desktop defaults to **high** IBL (4096×2048 float equirect → sharper PMREM speculars). Mobile uses **medium** (2048). Artistic plates are converted to **linear float** with highlight boost (not clipped LDR). Force with `?envQuality=high` or `?envQuality=medium`.
-
-## Honest physics map
-
-| Phenomenon | Nature | In Prizm |
-| --- | --- | --- |
-| Refraction (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | Custom: entry+exit `refract()` with captured exit normal; physical: `ior` |
-| Dispersion | \(n(\lambda)\) | Custom: per-channel IOR (requires non-parallel faces — see `scripts/test-dispersion.mjs`); physical: `dispersion` |
-| Double refraction | Ray bends in **and** out | Custom: entry normal + backface exit normal + thickness path |
-| Absorption | Beer–Lambert | attenuation color / distance |
-| Interior caustics | Focused refracted light | Custom: in-shader; physical demo: additive blades |
-| IBL | HDR environment | Procedural float recipes + artistic canvas plates |
-| Roughness blur | Microfacet smear | Custom: mip bias + direction jitter on plate/env (approx.) |
-
-Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\approx1.85\) (art-directed).
-
 ## Docs
 
-- `docs/preview/` — README gallery shots
-- `docs/ARQUITETURA.md` — pipeline map
-- `docs/DEBITO-TECNICO.md` — known fakes
-- `docs/CHECKLIST.md` — phase checklist (items need proof links)
-- `docs/slider-audit-after.md` — slider MAD after Plano V2
-- `docs/leak-test.md` — dispose leak gate
-- `docs/matrix/` — look × material × engine captures
+- [`docs/API.md`](docs/API.md) — `createPrism`, stage, presets
+- [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — pipeline map
+- [`docs/DEBITO-TECNICO.md`](docs/DEBITO-TECNICO.md) — known limits
+- [`docs/MEDICOES.md`](docs/MEDICOES.md) — perf / leak / bundle / slider audit
 
 ## Tests
 
 ```bash
-npm test                 # dispersion gate (math + prismMaterial source coupling)
-npm run check:lib        # lib-only bundle must not pull demo/post
-npm run test:leak        # 50× create/attach/dispose (needs Vite + Chrome)
-npm run audit:sliders    # rewrite slider-audit-after.md
-npm run capture:matrix   # 42 PNGs → docs/matrix/
+npm test              # dispersion gate (math + shader source)
+npm run check:lib     # lib bundle must not pull demo/post
+npm run test:leak     # 50× create/attach/dispose (Vite + Chrome)
 ```
-
-## Rules
-
-No `V2` / `New` / `Final` filenames. Edit in place; delete what you replace. No new dependencies without approval.
-No optical feature is “done” without a numeric test. Do not present SwiftShader fps as GPU results.

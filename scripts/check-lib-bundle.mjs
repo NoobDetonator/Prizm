@@ -67,18 +67,6 @@ assert.ok(sizeKb < 250, `lib bundle unexpectedly large (${sizeKb} KB) with three
 fs.rmSync(entry, { force: true })
 fs.rmSync(outDir, { recursive: true, force: true })
 
-const report = [
-  '# Lib bundle check (V3.6)',
-  '',
-  'Entry: `createPrism` / `createPrismStage` / `MATERIAL_PRESETS` only.',
-  '`three` marked external.',
-  '',
-  `- Bundle size: **${sizeKb} KB**`,
-  '- Contains `src/demo/*`: **no**',
-  '- Contains post stack / LOOK_PRESETS: **no**',
-  '',
-  'OK — tree-shaking boundary holds for embedded use.',
-  '',
-]
-fs.writeFileSync(path.join(root, 'docs', 'lib-bundle-check.md'), report.join('\n'))
-console.log('OK — wrote docs/lib-bundle-check.md')
+console.log('OK — lib tree-shake boundary holds')
+console.log(`  size: ${sizeKb} KB (three external)`)
+console.log('  no demo/post in bundle')
