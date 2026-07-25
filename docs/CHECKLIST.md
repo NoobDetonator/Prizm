@@ -85,6 +85,14 @@ Items are only markable when a **proof artifact** exists (screenshot, audit JSON
 - [x] E2 this checklist uses proof links
 - [x] E3 demo migration is active (resolved via Fase B), not “optional”
 
+## Plano V3 — closeout
+- [x] V3.1 `npm test` couples to `prismMaterial.js` source (reverting to `-N` fails)
+- [x] V3.2a backface kept; `plateScreenUV(T1,T2)` — see `docs/DEBITO-TECNICO.md`
+- [x] V3.3 exitN flip removed
+- [x] V3.4 slider audit methodology + dual engine — `docs/slider-audit-after.md`
+- [x] V3.5 `src/main.js` shim deleted; `index.html` → `/src/demo/main.js`
+- [x] V3.6 `docs/lib-bundle-check.md` (36 KB, no demo/post)
+
 ## Anti-objetivos
 - Não adicionar React/UI frameworks
 - Não novos npm deps sem aprovação
