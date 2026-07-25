@@ -14,7 +14,7 @@
       import * as THREE from 'three'
       import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
       import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-      import { createPrism, createPrismEnvironment } from '../src/lib/prizm/index.js'
+      import { createPrism, createPrismStage, createPrismEnvironment } from '../src/lib/prizm/index.js'
 
       const canvas = document.querySelector('#c')
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
@@ -43,8 +43,10 @@
       b.position.x = 1.5
       scene.add(a, b)
 
-      const prismA = createPrism({ renderer, preset: 'crystal' })
-      const prismB = createPrism({ renderer, preset: 'glass' })
+      // One shared refraction plate per frame (2 scene renders total: plate + main).
+      const stage = createPrismStage({ renderer })
+      const prismA = createPrism({ renderer, preset: 'crystal', engine: 'custom', stage })
+      const prismB = createPrism({ renderer, preset: 'glass', engine: 'custom', stage })
       prismA.attach(a)
       prismB.attach(b)
       prismB.setParams({ dispersion: 0.8, caustics: 0.2 })
@@ -62,8 +64,7 @@
         a.rotation.y = t * 0.35
         b.rotation.y = -t * 0.4
         controls.update()
-      prismA.beforeRender(renderer, scene, camera, [b])
-      prismB.beforeRender(renderer, scene, camera, [a])
+        stage.beforeRender(renderer, scene, camera)
         prismA.update(t)
         prismB.update(t)
         renderer.render(scene, camera)

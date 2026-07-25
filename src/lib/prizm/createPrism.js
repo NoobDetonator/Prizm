@@ -31,6 +31,7 @@ export function createPrism({
   shells = null,
   maskLayer = 1,
   refractionScale = 0.5,
+  stage = null,
 } = {}) {
   if (!renderer) throw new Error('createPrism requires a WebGLRenderer')
 
@@ -56,9 +57,12 @@ export function createPrism({
   const interiorMat = createGlassInteriorRimMaterial()
   const rimMat = createPrismRimMaterial()
 
-  const refraction = useCustom ? createRefractionCapture({ scale: refractionScale }) : null
+  // Shared stage owns the scene plate; each prism still has its own backface RT.
+  const useStage = Boolean(stage) && useCustom
+  const refraction = useCustom && !useStage ? createRefractionCapture({ scale: refractionScale }) : null
   const backface = useCustom ? createBackfaceCapture({ scale: refractionScale }) : null
   const viewProjection = new THREE.Matrix4()
+  let unregisterStage = null
 
   /** @type {THREE.Object3D | null} */
   let host = null
@@ -199,28 +203,47 @@ export function createPrism({
     }
   }
 
+  /** Called by createPrismStage before the shared plate capture */
+  function _stagePrepare(w, h, vpMatrix, scene) {
+    if (!useCustom || !backface || !host) return
+    backface.setSize(w, h)
+    glass.userData.setResolution?.(w, h)
+    glass.userData.setViewProjectionMatrix?.(vpMatrix)
+    if (scene?.environment) glass.userData.setEnvMap(scene.environment)
+  }
+
+  /** Called by createPrismStage after the shared plate capture */
+  function _stageApplyPlate(plate, rendererIn, camera) {
+    if (!useCustom || !backface || !host) return
+    const backTex = backface.capture(rendererIn, camera, host)
+    glass.userData.setBackfaceTexture?.(backTex)
+    glass.userData.setRefractionTexture(plate)
+  }
+
   /**
    * Custom engine: backface normals → scene refraction plate → feed material.
+   * When created with `{ stage }`, prefer `stage.beforeRender` (one shared plate).
    * @param {THREE.Object3D[]} [extraHide]
    */
   function beforeRender(rendererIn, scene, camera, extraHide = []) {
-    if (!useCustom || !refraction || !backface || !host) return
+    if (!useCustom || !backface || !host) return
+
+    if (useStage) {
+      stage.beforeRender(rendererIn, scene, camera)
+      return
+    }
+
+    if (!refraction) return
 
     const size = new THREE.Vector2()
     rendererIn.getSize(size)
     const pr = rendererIn.getPixelRatio()
-    const w = size.x * pr
-    const h = size.y * pr
+    const w = Math.max(1, Math.floor(size.x * pr))
+    const h = Math.max(1, Math.floor(size.y * pr))
 
-    backface.setSize(w, h)
-    refraction.setSize(w, h)
-    glass.userData.setResolution?.(w, h)
-
-    camera.updateMatrixWorld()
     viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-    glass.userData.setViewProjectionMatrix?.(viewProjection)
-
-    if (scene.environment) glass.userData.setEnvMap(scene.environment)
+    _stagePrepare(w, h, viewProjection, scene)
+    camera.updateMatrixWorld()
 
     const backTex = backface.capture(rendererIn, camera, host)
     glass.userData.setBackfaceTexture?.(backTex)
@@ -241,6 +264,8 @@ export function createPrism({
   function dispose() {
     if (disposed) return
     disposed = true
+    unregisterStage?.()
+    unregisterStage = null
     detach()
     glass.dispose()
     interiorMat.dispose()
@@ -257,6 +282,8 @@ export function createPrism({
     beforeRender,
     update,
     dispose,
+    _stagePrepare,
+    _stageApplyPlate,
     get engine() {
       return useCustom ? 'custom' : 'physical'
     },
@@ -269,6 +296,10 @@ export function createPrism({
     get host() {
       return host
     },
+  }
+
+  if (useStage) {
+    unregisterStage = stage.register(api)
   }
 
   return api

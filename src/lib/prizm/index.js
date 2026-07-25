@@ -8,6 +8,7 @@ export {
   estimateThickness,
   estimateThicknessFromBounds,
 } from './createPrism.js'
+export { createPrismStage } from './createPrismStage.js'
 export { createRefractionCapture } from './createRefractionCapture.js'
 export { createBackfaceCapture } from './createBackfaceCapture.js'
 export { createPrismMaterial, applyPrismMaterialParams } from '../../materials/prismMaterial.js'
