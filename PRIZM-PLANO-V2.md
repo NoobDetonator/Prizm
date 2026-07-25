@@ -1,18 +1,24 @@
 # Prizm — Plano V2
 
-Auditoria pós plano 1 + correções A→E. Detalhe completo na conversa do agente.
+Auditoria pós plano 1 + correções A→E.
 
-## Ordem
+## Status
 
-```
-A1 → A2 → A3 → A4 → D3
-  → B1 → B2 → B3 → B4
-  → C1 → C2 → C5
-  → D1 → D2 → D4 → D5
-  → E1 → E2 → E3
-  → A5, C3, C4, C6
-```
+**Implementado neste branch** (`cursor/plano-v2-shader-lib-44e4`):
+
+| Fase | Entrega | Prova |
+| --- | --- | --- |
+| A | Backface exit normals, linear shader, NDC UV, roughness mips/jitter | `npm test` |
+| B | Demo → `createPrism`; `src/demo/*` split; engine toggle | `wc -l src/demo/main.js` &lt; 250 |
+| C | detach restore, `createPrismStage`, shellOffset, thickness flag/bounds | `examples/two-prisms.html` |
+| D | slider-audit-after, leak-test PASS, matrix×42, perf honesty | `docs/*` |
+| E | README / CHECKLIST / DÉBITO honestos | linked artifacts |
 
 ## Regra dura
 
 Nenhuma feature óptica é “concluída” sem teste numérico (`npm test` / `scripts/test-dispersion.mjs`).
+Perf em SwiftShader ≠ GPU — ver `docs/perf-after.md`.
+
+## Open bugs (não marcar como feito)
+
+Sliders still weak on physical demo: `roughness`, `speckle`, `dof-focus`, `afterimage`, `ascii-cell`, `dpr` — see `docs/slider-audit-after.md`.
