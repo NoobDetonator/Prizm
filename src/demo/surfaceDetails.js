@@ -32,10 +32,10 @@ export function createSurfaceDetails(dimensions, speckleCount, scratchCount) {
   pointsGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3))
   pointsGeometry.setAttribute('color', new THREE.BufferAttribute(pointColors, 3))
   const pointsMaterial = new THREE.PointsMaterial({
-    size: 0.009,
+    size: 0.014,
     vertexColors: true,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.55,
     depthWrite: false,
     depthTest: true,
     blending: THREE.AdditiveBlending,
@@ -43,7 +43,7 @@ export function createSurfaceDetails(dimensions, speckleCount, scratchCount) {
   })
   pointsMaterial.toneMapped = false
   const points = new THREE.Points(pointsGeometry, pointsMaterial)
-  points.renderOrder = 3
+  points.renderOrder = 5
   group.add(points)
 
   const scratchPositions = new Float32Array(scratchCount * 6)
@@ -74,14 +74,16 @@ export function createSurfaceDetails(dimensions, speckleCount, scratchCount) {
   })
   scratchMaterial.toneMapped = false
   const scratches = new THREE.LineSegments(scratchGeometry, scratchMaterial)
-  scratches.renderOrder = 3
+  scratches.renderOrder = 5
   group.add(scratches)
 
+  // Intensity must move pixels: opacity + size (MAD was collapsing after V2 refactor).
   group.userData.setIntensity = (value) => {
     const amount = THREE.MathUtils.clamp(value, 0, 1)
-    pointsMaterial.opacity = amount * 0.72
-    scratchMaterial.opacity = amount * 0.42
-    group.visible = amount > 0.01
+    pointsMaterial.opacity = amount * 0.95
+    pointsMaterial.size = 0.006 + amount * 0.028
+    scratchMaterial.opacity = amount * 0.55
+    group.visible = amount > 0.005
   }
 
   return group

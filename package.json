@@ -10,6 +10,7 @@
     "test": "node scripts/test-dispersion.mjs",
     "test:dispersion": "node scripts/test-dispersion.mjs",
     "test:leak": "node scripts/leak-test.mjs",
+    "check:lib": "node scripts/check-lib-bundle.mjs",
     "audit:sliders": "node scripts/slider-audit-after.mjs",
     "capture:previews": "node scripts/capture-previews.mjs",
     "capture:matrix": "node scripts/capture-matrix.mjs",

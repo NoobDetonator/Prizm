@@ -134,6 +134,7 @@ export function createUiController(ctx) {
       ior: values.ior,
       roughness: values.roughness,
       translucency: values.translucency,
+      speckle: values.speckle,
       caustics: values.caustics,
       bloom: values.bloom,
     })

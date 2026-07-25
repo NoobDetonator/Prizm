@@ -85,10 +85,12 @@ renderer.render(scene, camera)
 
 | Engine | What it is | Needs `beforeRender` |
 | --- | --- | --- |
-| `custom` (lib default) | Double-refract screen-space with **backface exit normals** + per-channel IOR (numeric proof: `npm test`) + in-shader caustics | Yes (`prism.beforeRender` or `stage.beforeRender`) |
+| `custom` (lib default) | Double-refract screen-space: backface exit normals drive **T2** (env + plate beyond-exit offset) + per-channel IOR; gate: `npm test` (math + shader source) | Yes (`prism.beforeRender` or `stage.beforeRender`) |
 | `physical` (demo default) | `MeshPhysicalMaterial.transmission` | No |
 
 Multi-instance: pass a shared `createPrismStage({ renderer })` so all custom prisms share **one** refraction plate per frame.
+
+Backface pre-pass is kept on purpose (V3.2a): plate UVs combine T1 path displacement with T2 exit direction so exit normals change pixels, not only the 22% env mix.
 
 Procedural presets: `spectral`, `midnight`, `tungsten`, `disco`, `overcast`, `aurora`  
 Artistic presets: `gradientStudio`, `neonAlley`, `paperSky`, `emberHall`, `iceRink`
@@ -130,7 +132,8 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## Tests
 
 ```bash
-npm test                 # dispersion numeric gate (D3)
+npm test                 # dispersion gate (math + prismMaterial source coupling)
+npm run check:lib        # lib-only bundle must not pull demo/post
 npm run test:leak        # 50× create/attach/dispose (needs Vite + Chrome)
 npm run audit:sliders    # rewrite slider-audit-after.md
 npm run capture:matrix   # 42 PNGs → docs/matrix/

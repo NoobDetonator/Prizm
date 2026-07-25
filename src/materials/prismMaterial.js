@@ -160,13 +160,14 @@ export function createPrismMaterial({
       }
 
       /**
-       * Screen UV for a channel: travel along T1 inside the volume, then look up
-       * the projected exit point. Uses real exit normal for the outgoing ray when
-       * sampling env; for the RT we sample at the projected exit footprint.
+       * Plate UV: march to exit along T1, then sample a short step beyond along T2.
+       * T1 alone already smears by entry IOR; T2 makes the backface exit normal
+       * change which texel is read (otherwise the RT path ignores exitN).
        */
-      vec2 exitScreenUV(vec3 entryPos, vec3 T1, float path) {
+      vec2 plateScreenUV(vec3 entryPos, vec3 T1, vec3 T2, float path) {
         vec3 exitPos = entryPos + T1 * path;
-        return projectToScreenUV(exitPos);
+        vec3 beyond = exitPos + T2 * (path * 0.22);
+        return projectToScreenUV(beyond);
       }
 
       vec3 proceduralCaustics(vec3 wp, float t) {
@@ -200,15 +201,17 @@ export function createPrismMaterial({
         }
 
         // Exit normal from backface pre-pass (world space). Fallback -N only if missing.
+        // Capture is BackSide + GreaterDepth — sample is already the far face; do not flip.
         vec3 exitN = -N;
         if (hasBackface > 0.5) {
           vec2 sUv = gl_FragCoord.xy / resolution;
           vec4 packed = texture2D(tBackfaceNormal, sUv);
-          // Valid sample when depth was written (A > 0).
           if (packed.a > 1e-4) {
-            exitN = normalize(packed.xyz * 2.0 - 1.0);
-            // Ensure exit normal faces roughly opposite the entry (outward on far face).
-            if (dot(exitN, N) > 0.0) exitN = -exitN;
+            vec3 sampled = normalize(packed.xyz * 2.0 - 1.0);
+            // Invalid if normal faces the camera (front-face leak); keep fallback -N.
+            if (dot(sampled, V) <= 0.0) {
+              exitN = sampled;
+            }
           }
         }
 
@@ -241,11 +244,10 @@ export function createPrismMaterial({
 
         vec3 transmitted;
         if (hasRefraction > 0.5) {
-          // Per-channel screen lookup at projected exit footprints (T1 path differs by IOR).
-          // Mip bias follows roughness so frosted glass softens the plate.
-          float r = sampleRefraction(exitScreenUV(vWorldPos, T1R, path), rough).r;
-          float g = sampleRefraction(exitScreenUV(vWorldPos, T1G, path), rough).g;
-          float b = sampleRefraction(exitScreenUV(vWorldPos, T1B, path), rough).b;
+          // T1 path + T2 beyond-exit: backface IOR split moves the plate read.
+          float r = sampleRefraction(plateScreenUV(vWorldPos, T1R, T2R, path), rough).r;
+          float g = sampleRefraction(plateScreenUV(vWorldPos, T1G, T2G, path), rough).g;
+          float b = sampleRefraction(plateScreenUV(vWorldPos, T1B, T2B, path), rough).b;
           transmitted = vec3(r, g, b);
         } else {
           transmitted = vec3(

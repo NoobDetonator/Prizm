@@ -89,9 +89,13 @@ export function applyPhysicalParams(material, params) {
     translucency,
   )
   material.attenuationColor.set(preset.attenuationColor).lerp(MILKY_TINT, translucency * 0.24)
-  material.roughness = THREE.MathUtils.clamp(params.roughness + translucency * 0.025, 0, 0.4)
+  const rough = THREE.MathUtils.clamp((params.roughness ?? 0) + translucency * 0.025, 0, 0.55)
+  material.roughness = rough
+  // Clearcoat tracks roughness so the slider moves specular lobe (was near-invisible at 0–0.35).
+  material.clearcoatRoughness = THREE.MathUtils.clamp(rough * 0.65, 0.02, 0.45)
   material.envMapIntensity = preset.envMapIntensity * (1.08 - translucency * 0.06)
-  const normalStrength = 0.055 + params.speckle * 0.3
+  const speckle = params.speckle ?? 0.3
+  const normalStrength = 0.055 + speckle * 0.45
   material.normalScale.set(normalStrength, normalStrength)
   material.clearcoatNormalScale.set(normalStrength * 0.35, normalStrength * 0.35)
 }
