@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-- Demo: `index.html` → `src/main.js`
+- Demo: `index.html` → `src/demo/main.js`
 - Library examples: `/examples/`
 - Regenerate previews: `node scripts/capture-previews.mjs http://127.0.0.1:5173/`
 
@@ -85,7 +85,7 @@ renderer.render(scene, camera)
 
 | Engine | What it is | Needs `beforeRender` |
 | --- | --- | --- |
-| `custom` (lib default) | Double-refract screen-space: backface exit normals drive **T2** (env + plate beyond-exit offset) + per-channel IOR; gate: `npm test` (math + shader source) | Yes (`prism.beforeRender` or `stage.beforeRender`) |
+| `custom` (lib default) | Double-refract screen-space: backface exit normals drive **T2** (plate beyond-exit offset) + per-channel IOR; env from the PMREM, used where the exit ray leaves the frame; gate: `npm test` (source/math **and** a headless GPU pass that reads pixels) | Yes (`prism.beforeRender` or `stage.beforeRender`) |
 | `physical` (demo default) | `MeshPhysicalMaterial.transmission` | No |
 
 Multi-instance: pass a shared `createPrismStage({ renderer })` so all custom prisms share **one** refraction plate per frame.
@@ -105,17 +105,21 @@ Look preset **Void prism** (`voidPrism`): transparent canvas clear + `proc:liqui
 
 Desktop defaults to **high** IBL (4096×2048 float equirect → sharper PMREM speculars). Mobile uses **medium** (2048). Artistic plates are converted to **linear float** with highlight boost (not clipped LDR). Force with `?envQuality=high` or `?envQuality=medium`.
 
+Both engines read the PMREM, so the quality tier affects both. The source equirect is disposed once the PMREM is built.
+
 ## Honest physics map
 
 | Phenomenon | Nature | In Prizm |
 | --- | --- | --- |
 | Refraction (Snell) | \(n_1\sin\theta_1 = n_2\sin\theta_2\) | Custom: entry+exit `refract()` with captured exit normal; physical: `ior` |
 | Dispersion | \(n(\lambda)\) | Custom: per-channel IOR (requires non-parallel faces — see `scripts/test-dispersion.mjs`); physical: `dispersion` |
-| Double refraction | Ray bends in **and** out | Custom: entry normal + backface exit normal + thickness path |
+| Double refraction | Ray bends in **and** out | Custom: entry normal + backface exit normal + thickness path. The exit term only gets `PLATE_EXIT_STEP` (0.22) of the path, so its measured contribution is small — see `docs/DEBITO-TECNICO.md` |
 | Absorption | Beer–Lambert | attenuation color / distance |
-| Interior caustics | Focused refracted light | Custom: in-shader; physical demo: additive blades |
-| IBL | HDR environment | Procedural float recipes + artistic canvas plates |
-| Roughness blur | Microfacet smear | Custom: mip bias + direction jitter on plate/env (approx.) |
+| IBL | HDR environment | Procedural float recipes + artistic canvas plates, sampled through the PMREM |
+| Roughness blur | Microfacet smear | Custom: PMREM mip by roughness + direction jitter on the plate (approx.) |
+
+Interior caustics are **not** implemented in either engine — the additive blade
+effect was removed in `bff9915` and nothing replaced it.
 
 Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\approx1.85\) (art-directed).
 
@@ -132,14 +136,32 @@ Presets: crown glass \(n\approx1.52\), flint \(n\approx1.62\), crystal \(n\appro
 ## Tests
 
 ```bash
-npm test                 # dispersion gate (math + prismMaterial source coupling)
-npm run check:lib        # lib-only bundle must not pull demo/post
-npm run test:leak        # 50× create/attach/dispose (needs Vite + Chrome)
-npm run audit:sliders    # rewrite slider-audit-after.md
-npm run capture:matrix   # 42 PNGs → docs/matrix/
+npm test                  # source/math gate + headless GPU gate (needs Chrome)
+npm run test:dispersion   # source/math only — fast, no browser
+npm run test:gpu          # reads pixels: backface RT, dispersion, blowout, backface payoff
+npm run verify            # npm test + check:lib
+npm run check:lib         # lib-only bundle must not pull demo/post
+npm run test:leak         # 50× create/attach/dispose (needs Vite + Chrome)
+npm run audit:sliders     # rewrite slider-audit-after.md (needs Vite)
+npm run calibrate:speckle # engine-vs-engine body stats sweep (needs Vite)
+npm run capture:matrix    # 42 PNGs → docs/matrix/ (needs Vite)
 ```
+
+Chrome is located by `scripts/findChrome.mjs` (Windows / macOS / Linux, or
+`CHROME_PATH`). Scripts that need the dev server default to `http://localhost:5173/`.
+
+`test:dispersion` checks the math model and greps the shader source — it passed
+for the entire life of the project while the exit-normal path was dead at
+runtime. `test:gpu` is the one that renders and measures.
 
 ## Rules
 
 No `V2` / `New` / `Final` filenames. Edit in place; delete what you replace. No new dependencies without approval.
 No optical feature is “done” without a numeric test. Do not present SwiftShader fps as GPU results.
+
+A test only counts if it can fail for the reason you are citing it for. Asserting
+that the shader *source* contains a string is not evidence that the shader *runs*:
+`test:dispersion` stayed green for the entire life of the project while the
+backface exit-normal path was dead on every frame. Optical claims cite
+`test:gpu`, which renders and reads pixels. When a committed artifact disagrees
+with a checkmark, the artifact wins.

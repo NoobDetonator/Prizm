@@ -2,6 +2,16 @@
 
 Look `studio`, locked camera. Hide one mesh at a time; MAD < **0.05** ⇒ dead.
 
+> **Snapshot histórico.** Mede um build que não existe mais: `internal-caustics`
+> foi deletado em `bff9915`.
+>
+> Vale reler a primeira linha. `surface-details` foi medido como **dead** aqui
+> (MAD 0.02) e mantido assim mesmo. Ele era invisível porque a medição rodou no
+> motor `physical` — em 2026-07-25 descobriu-se que, no motor `custom`, essa mesma
+> camada aditiva levava 37% do corpo a branco puro e derrubava a cromaticidade da
+> refração de 46.5 para 12.9. Um objeto medido como "não contribui" não é inócuo:
+> é um objeto que ninguém sabe o que faz. Ver `docs/DEBITO-TECNICO.md`.
+
 | object | MAD | contributes? |
 | --- | --- | --- |
 | `surface-details` (cb05c294) | 0.0215 | **dead** |

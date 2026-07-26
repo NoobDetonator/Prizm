@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const outDir = path.join(__dirname, '..', 'docs', 'matrix')
@@ -12,14 +13,14 @@ const looks = ['studio', 'anamorphic', 'portrait', 'neonAscii', 'ghostTrail', 'p
 const materials = ['glass', 'flint', 'crystal']
 
 const browser = await puppeteer.launch({
-  executablePath: '/usr/local/bin/google-chrome',
+  executablePath: findChrome(),
   headless: 'new',
   args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--window-size=960,540'],
   defaultViewport: { width: 960, height: 540, deviceScaleFactor: 1 },
 })
 const page = await browser.newPage()
 page.setDefaultTimeout(180_000)
-await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle0' })
+await page.goto('http://localhost:5173/', { waitUntil: 'networkidle0' })
 await page.waitForFunction(() => window.__prizm?.setEngine)
 await page.evaluate(() => {
   window.__prizm.lockCamera()

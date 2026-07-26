@@ -12,12 +12,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outFile = path.join(root, 'docs', 'slider-audit-after.md')
 const beforeFile = path.join(root, 'docs', 'slider-audit-before.md')
-const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
+const baseUrl = process.argv[2] || 'http://localhost:5173/'
 const MAD_DEAD = 0.15
 
 const sliders = [
@@ -34,11 +35,6 @@ const dependsOn = {
 
 const engines = ['physical', 'custom']
 
-const chromeCandidates = [
-  process.env.CHROME_PATH,
-  '/usr/local/bin/google-chrome',
-  '/usr/bin/google-chrome',
-].filter(Boolean)
 
 function parseBeforeMad(md) {
   /** @type {Record<string, number|null>} */
@@ -181,8 +177,7 @@ async function auditEngine(page, engine) {
 }
 
 async function main() {
-  const executablePath = chromeCandidates.find((c) => fs.existsSync(c))
-  if (!executablePath) throw new Error('Chrome not found')
+  const executablePath = findChrome()
 
   const beforeMad = fs.existsSync(beforeFile) ? parseBeforeMad(fs.readFileSync(beforeFile, 'utf8')) : {}
 

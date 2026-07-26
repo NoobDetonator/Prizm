@@ -2,6 +2,23 @@
 
 Items are only markable when a **proof artifact** exists (screenshot, audit JSON/MD, or test output). Rubric-only self-scoring is not enough.
 
+> **Post-mortem (2026-07-25).** This rule did not hold. Fase 7, A2 and V3.1–V3.3
+> were all marked done, citing `npm test` — a gate that greps the shader source
+> and runs a JS re-implementation of the math. Neither touches the GPU. The
+> feature they certified (double refraction through captured backface exit
+> normals) **never executed once**: `createBackfaceCapture` cleared depth to 1.0
+> while testing `GREATER`, so the render target was empty on every frame and the
+> shader always took its `-N` fallback.
+>
+> Two committed artifacts already contradicted the checkmarks and were read as
+> something else: `slider-audit-after.md` reported `dispersion` and `roughness`
+> DEAD on `custom` (filed under "still open sliders"), and every `*__custom.png`
+> in `docs/matrix/` was a flat white brick.
+>
+> A proof artifact only counts if it can fail for the reason you are claiming.
+> `scripts/test-refraction-gpu.mjs` renders and reads pixels; it is the gate the
+> optical items below are now allowed to cite.
+
 ## Plano 1 — Fases 0–8 (historical)
 
 ### Fase 0 — Baseline
@@ -11,13 +28,14 @@ Items are only markable when a **proof artifact** exists (screenshot, audit JSON
 
 ### Fase 1 — Bugs críticos
 - [x] T1.1 Rim interior additive — `glassInteriorRimMaterial.js`
-- [x] T1.2 Cáusticas visíveis — `createInternalCaustics.js` (`depthTest: false`)
+- [ ] ~~T1.2 Cáusticas visíveis~~ — **revertido**: `createInternalCaustics.js` foi
+  deletado em `bff9915`. Não há cáusticas em nenhum motor.
 - [x] T1.3 Remoção de `cubeBack`
 - [x] T1.4 Streetwear opaco (alpha na textura)
 - [x] T1.5 `docs/visibility-audit.md`
 
 ### Fase 2 — Pipeline pós
-- [x] Máscara na **extração** bloom/glare/flare
+- [x] Máscara na **extração** do bloom (glare e flare foram removidos em `bff9915`)
 - [x] Ordem: clean → stylize → selective → ASCII → optical → DoF → film → out
 - [x] Film grade full-frame; chroma pré-mix
 
@@ -37,11 +55,13 @@ Items are only markable when a **proof artifact** exists (screenshot, audit JSON
 - [x] Examples: box, torus, two-prisms (shared stage), gltf-like, embedded, physical
 - [x] `estimateThicknessFromBounds` (AABB heuristic, documented)
 
-### Fase 7 — Shader próprio (corrigido no Plano V2)
-- [x] Double-refract with **real backface exit normals** — proof: `npm test` / `scripts/test-dispersion.mjs`
+### Fase 7 — Shader próprio (corrigido no Plano V2, re-aberto e fechado em 2026-07-25)
+- [x] Double-refract with **real backface exit normals** — proof: `npm run test:gpu`
+  G1 (backface RT = 7024/25600 samples; era 0/25600 antes da correção do depth clear)
 - [x] Linear unclamped output (`toneMapped: false`) for HDR bloom
 - [x] `beforeRender` capture + optional `createPrismStage`
-- [x] Cáusticas no shader (custom)
+- [ ] ~~Cáusticas no shader (custom)~~ — nunca existiu no `prismMaterial.js`;
+  `grep -ri caustic src/` retorna zero.
 
 ### Fase 8 — Docs
 - [x] README física vs fake (honest after V2)
@@ -53,11 +73,14 @@ Items are only markable when a **proof artifact** exists (screenshot, audit JSON
 
 ### Fase A — shader real
 - [x] A1 `createBackfaceCapture.js`
-- [x] A2 exit normals in `prismMaterial.js`
+- [x] A2 exit normals in `prismMaterial.js` — **estava quebrado até 2026-07-25**
+  (depth clear); agora provado por `test:gpu` G1
 - [x] A3 no inline ACES/clamp
 - [x] A4 NDC-projected exit UV
-- [x] A5 roughness mip bias + jitter
-- [x] D3 `npm test` dispersion gate
+- [x] A5 roughness mip — **corrigido**: o bias era no-op no equirect
+  (`generateMipmaps = false`); agora via PMREM `textureCubeUV`
+- [x] D3 `npm test` dispersion gate — mantido como gate de **fonte/matemática**;
+  não substitui `test:gpu`
 
 ### Fase B — demo = lib consumer
 - [x] B1 demo uses `createPrism` — `src/demo/sceneSetup.js`
@@ -87,7 +110,9 @@ Items are only markable when a **proof artifact** exists (screenshot, audit JSON
 
 ## Plano V3 — closeout
 - [x] V3.1 `npm test` couples to `prismMaterial.js` source (reverting to `-N` fails)
-- [x] V3.2a backface kept; `plateScreenUV(T1,T2)` — see `docs/DEBITO-TECNICO.md`
+  — **insuficiente sozinho**: acopla ao texto do shader, não ao que roda
+- [x] V3.2a backface kept; `plateScreenUV(T1,T2)` — agora com o retorno medido
+  (MAD 2.4/255) e gate G4 em `docs/DEBITO-TECNICO.md`
 - [x] V3.3 exitN flip removed
 - [x] V3.4 slider audit methodology + dual engine — `docs/slider-audit-after.md`
 - [x] V3.5 `src/main.js` shim deleted; `index.html` → `/src/demo/main.js`

@@ -21,4 +21,16 @@ Perf em SwiftShader ≠ GPU — ver `docs/perf-after.md`.
 
 ## Open bugs (não marcar como feito)
 
-Sliders still weak on physical demo: `roughness`, `speckle`, `dof-focus`, `afterimage`, `ascii-cell`, `dpr` — see `docs/slider-audit-after.md`.
+**Fechado em 2026-07-25.** Todos os sliders listados aqui estão vivos na auditoria
+atual (`physical` 0/19 mortos). Os que continuam abaixo do limiar são no motor
+`custom` e estão justificados em `docs/DEBITO-TECNICO.md`:
+
+- `transmission-scale` — morto por construção (só afeta `MeshPhysicalMaterial`)
+- `speckle` — MAD 0.14; subir a camada decorativa até "passar" custaria o sinal
+  de refração (medido)
+
+## Correção do gate (2026-07-25)
+
+A prova citada nesta tabela — `npm test` — não podia falhar pelo motivo alegado.
+O pre-pass de backface nunca rodou. Ver `docs/CHECKLIST.md` (post-mortem) e o
+novo gate de pixel `scripts/test-refraction-gpu.mjs`.

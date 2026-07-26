@@ -4,8 +4,8 @@
 
 | metric | before | after | Δ |
 | --- | --- | --- | --- |
-| geometries | 11 | 11 | **0** |
-| textures | 32 | 32 | **0** |
+| geometries | 7 | 7 | **0** |
+| textures | 23 | 23 | **0** |
 
 **PASS** — memory deltas are zero.
 

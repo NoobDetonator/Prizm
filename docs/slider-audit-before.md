@@ -1,5 +1,9 @@
 # Slider audit (before)
 
+> **Snapshot histórico (Fase 0).** As linhas `caustics`, `glare` e `flare` medem
+> controles que não existem mais — removidos em `bff9915`. Mantido só como
+> baseline das colunas "MAD before" em `docs/slider-audit-after.md`.
+
 Look: `studio`, camera locked, auto-spin off.
 Method: set slider min → capture RGBA → set max → capture → mean absolute channel difference (MAD).
 Threshold: MAD < **0.15** ⇒ dead / effectively dead.

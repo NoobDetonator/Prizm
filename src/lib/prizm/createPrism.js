@@ -140,6 +140,7 @@ export function createPrism({
     let scene = mesh?.parent
     while (scene && !scene.isScene) scene = scene.parent
     if (scene?.environment) glass.userData.setEnvMap(scene.environment)
+    if (scene) glass.userData.setEnvironmentIntensity?.(scene.environmentIntensity)
   }
 
   function detach() {
@@ -194,6 +195,9 @@ export function createPrism({
     glass.userData.setResolution?.(w, h)
     glass.userData.setViewProjectionMatrix?.(vpMatrix)
     if (scene?.environment) glass.userData.setEnvMap(scene.environment)
+    // scene.environmentIntensity is the demo's "Env intensity" slider; the custom
+    // material used to ignore it entirely, so the control only moved `physical`.
+    if (scene) glass.userData.setEnvironmentIntensity?.(scene.environmentIntensity)
   }
 
   /** Called by createPrismStage after the shared plate capture */

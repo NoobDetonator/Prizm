@@ -7,11 +7,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outDir = path.join(root, 'docs', 'preview')
-const baseUrl = process.argv[2] || 'http://127.0.0.1:5195/'
+const baseUrl = process.argv[2] || 'http://localhost:5173/'
 
 const shots = [
   // Heroes for README top
@@ -65,18 +66,9 @@ const shots = [
   { file: 'env-ice-rink.png', look: 'portrait', env: 'art:iceRink', exposure: 1.0, envIntensity: 1.75, w: 1280, h: 720 },
 ]
 
-const chromeCandidates = [
-  process.env.CHROME_PATH,
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  '/usr/local/bin/google-chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium-browser',
-].filter(Boolean)
-
 async function main() {
   fs.mkdirSync(outDir, { recursive: true })
-  const executablePath = chromeCandidates.find((c) => fs.existsSync(c))
+  const executablePath = findChrome()
   if (!executablePath) throw new Error('Chrome/Chromium not found')
 
   const browser = await puppeteer.launch({

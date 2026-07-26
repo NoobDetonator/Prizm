@@ -7,23 +7,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outDir = path.join(root, 'docs', 'baseline')
-const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
+const baseUrl = process.argv[2] || 'http://localhost:5173/'
 const presets = ['studio', 'anamorphic', 'portrait', 'neonAscii', 'ghostTrail', 'printShop', 'prismChaos']
-
-const chromeCandidates = [
-  process.env.CHROME_PATH,
-  '/usr/local/bin/google-chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium-browser',
-].filter(Boolean)
 
 async function main() {
   fs.mkdirSync(outDir, { recursive: true })
-  const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate))
+  const executablePath = findChrome()
   if (!executablePath) throw new Error('Chrome/Chromium not found')
 
   const browser = await puppeteer.launch({

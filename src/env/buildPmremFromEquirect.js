@@ -20,13 +20,16 @@ export function buildPmremFromEquirect(renderer, equirect, meta = {}) {
   const target = pmrem.fromEquirectangular(equirect)
   const envMap = target.texture
 
-  envMap.userData.equirect = equirect
   for (const [key, value] of Object.entries(meta)) {
     envMap.userData[key] = value
   }
 
   // Keep the RT alive via the texture; dispose generator only.
   pmrem.dispose()
+  // The source equirect was only kept alive (as `userData.equirect`) so the custom
+  // prism shader could sample it directly. It reads the PMREM now, so the staging
+  // texture is dead weight — a 4096×2048 RGBA float equirect is ~134 MB on the GPU.
+  equirect.dispose()
   return envMap
 }
 

@@ -91,11 +91,16 @@ export function createBackfaceCapture({ scale = 0.5 } = {}) {
     camera.layers.set(BACKFACE_LAYER)
     renderer.autoClear = false
     renderer.setRenderTarget(rt)
-    // GreaterDepth: seed depth at 0 so farther fragments win.
     renderer.setClearColor(0x000000, 0)
+    // GreaterDepth needs the depth buffer seeded at 0 so farther fragments win.
+    // `setClearColor` only touches colour — without this the buffer clears to the
+    // WebGL default of 1.0, GREATER rejects every fragment, and the RT stays empty.
+    // Gated by scripts/test-refraction-gpu.mjs (G1).
+    renderer.state.buffers.depth.setClear(0)
     renderer.clear(true, true, true)
     renderer.render(scene, camera)
 
+    renderer.state.buffers.depth.setClear(1)
     renderer.setRenderTarget(prevTarget)
     renderer.autoClear = prevAutoClear
     camera.layers.mask = prevLayers
@@ -114,6 +119,10 @@ export function createBackfaceCapture({ scale = 0.5 } = {}) {
   return {
     get texture() {
       return rt.texture
+    },
+    /** Exposed so gates can read the RT back and assert it is not empty. */
+    get renderTarget() {
+      return rt
     },
     get layer() {
       return BACKFACE_LAYER

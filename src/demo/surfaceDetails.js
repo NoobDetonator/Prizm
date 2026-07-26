@@ -77,12 +77,23 @@ export function createSurfaceDetails(dimensions, speckleCount, scratchCount) {
   scratches.renderOrder = 5
   group.add(scratches)
 
-  // Intensity must move pixels: opacity + size (MAD was collapsing after V2 refactor).
+  /**
+   * Intensity must move pixels — but as surface sparkle, not as a wash.
+   *
+   * The previous scaling (opacity up to 0.95, size up to 0.034) was tuned by eye
+   * against the `physical` engine, where it is measurably a no-op: sweeping it
+   * 0 → 1 moves the body luma 135.1 → 135.5 and chroma 42.5 → 42.2. On `custom`
+   * the same layer buried the render — at the demo default of 0.45 it pushed luma
+   * 90 → 165, turned 37% of the body pure white and cut chroma from 46.5 to 12.9,
+   * which is why every `*__custom.png` capture was a flat white brick.
+   * Re-scaled so both engines stay readable; `npm run calibrate:speckle` reproduces
+   * the sweep, and `scripts/test-refraction-gpu.mjs` G3 guards the blowout.
+   */
   group.userData.setIntensity = (value) => {
     const amount = THREE.MathUtils.clamp(value, 0, 1)
-    pointsMaterial.opacity = amount * 0.95
-    pointsMaterial.size = 0.006 + amount * 0.028
-    scratchMaterial.opacity = amount * 0.55
+    pointsMaterial.opacity = amount * 0.12
+    pointsMaterial.size = 0.004 + amount * 0.005
+    scratchMaterial.opacity = amount * 0.08
     group.visible = amount > 0.005
   }
 

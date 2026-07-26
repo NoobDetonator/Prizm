@@ -2,7 +2,7 @@
 
 **Repositório:** `NoobDetonator/Prizm`
 **Stack:** Three.js 0.178, Vite 7, sem dependências extras
-**Entry real:** `index.html` → `src/main.js`
+**Entry real:** `index.html` → `src/demo/main.js` (o shim `src/main.js` foi deletado em V3.5)
 **Branch de trabalho:** `cursor/fix-render-pipeline-44e4`
 **Objetivo final:** material/shader de prisma reutilizável em qualquer geometria, com demo.
 
@@ -30,3 +30,7 @@
 | 8 | Docs honestas |
 
 Detalhamento completo das tarefas T0.1–T8.3, anti-objetivos e checklist de revisão estão na especificação de origem deste plano.
+
+> **Documento histórico.** Descreve o estado do projeto na época do Plano 1.
+> Cáusticas, glare e lens flare foram removidos em `bff9915` e não existem mais.
+> O estado atual e o post-mortem do Plano V2/V3 estão em `docs/CHECKLIST.md`.

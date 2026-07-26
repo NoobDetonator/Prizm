@@ -3,16 +3,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outFile = path.join(root, 'docs', 'visibility-audit.md')
-const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
+const baseUrl = process.argv[2] || 'http://localhost:5173/'
 const MAD_DEAD = 0.05
 
 async function main() {
   const browser = await puppeteer.launch({
-    executablePath: '/usr/local/bin/google-chrome',
+    executablePath: findChrome(),
     headless: 'new',
     args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--window-size=960,540'],
     defaultViewport: { width: 960, height: 540, deviceScaleFactor: 1 },

@@ -9,22 +9,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
+import { findChrome } from './findChrome.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const outFile = path.join(root, 'docs', 'leak-test.md')
-const baseUrl = process.argv[2] || 'http://127.0.0.1:5173/'
+const baseUrl = process.argv[2] || 'http://localhost:5173/'
 const CYCLES = 50
 
-const chromeCandidates = [
-  process.env.CHROME_PATH,
-  '/usr/local/bin/google-chrome',
-  '/usr/bin/google-chrome',
-].filter(Boolean)
 
 async function main() {
-  const executablePath = chromeCandidates.find((c) => fs.existsSync(c))
-  if (!executablePath) throw new Error('Chrome not found')
+  const executablePath = findChrome()
 
   const browser = await puppeteer.launch({
     executablePath,

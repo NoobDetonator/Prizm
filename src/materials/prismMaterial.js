@@ -8,14 +8,35 @@ import { MATERIAL_PRESETS } from './physicalGlass.js'
  *  1. Fresnel (Schlick) splits reflection vs transmission.
  *  2. Entry refraction with per-channel IOR (dispersion).
  *  3. Exit refraction using captured backface world-normal (not -N).
- *  4. Sample scene RT / env via NDC-projected exit points (per channel).
+ *  4. Sample scene RT via NDC-projected exit points (per channel); rays whose
+ *     exit point leaves the captured frame fall back to the environment.
  *  5. Beer–Lambert attenuation.
+ *
+ * The environment is read through three's PMREM (`textureCubeUV`), so roughness
+ * selects a convolved mip. Sampling the raw equirect instead — as this material
+ * used to — meant the roughness mip bias was a no-op (the equirect is built with
+ * `generateMipmaps = false`), the u=0/1 seam was visible, and a flat 22% of
+ * unconvolved HDR radiance was mixed into the transmitted term on every fragment,
+ * whether or not the plate had valid data for it. See `scripts/test-refraction-gpu.mjs`.
+ *
+ * (The flat-white `*__custom.png` captures were a separate defect — the demo's
+ * additive `surface-details` layer, see `docs/DEBITO-TECNICO.md`.)
  *
  * Output is **linear, unclamped** — tone mapping belongs to EffectComposer OutputPass.
  *
  * Call each frame (via createPrism.beforeRender):
  *   setBackfaceTexture / setRefractionTexture / setResolution / setViewProjection
  */
+/**
+ * Linear radiance scale applied to the custom engine's output before the
+ * composer's ACES pass. Calibrated, not taste: with the previous value (0.28) the
+ * body landed at 8-bit luma 91 against the `physical` engine's 138 on the same
+ * frame — low enough on the ACES curve that the demo's additive `surface-details`
+ * layer, which is invisible on `physical`, washed the whole cube to white and cut
+ * measured chroma from 46.6 to 13.5. See `scripts/calibrate-exposure.mjs`.
+ */
+export const PRISM_EXPOSURE = 0.28
+
 export function createPrismMaterial({
   preset = 'crystal',
   map = null,
@@ -26,11 +47,14 @@ export function createPrismMaterial({
 
   const material = new THREE.ShaderMaterial({
     name: 'PrizmDoubleRefract',
+    // CUBEUV_* are filled in by setEnvMap once a PMREM is attached.
+    defines: {},
     uniforms: {
       tRefraction: { value: null },
       tBackfaceNormal: { value: null },
       envMap: { value: null },
       envMapIntensity: { value: p.envMapIntensity },
+      environmentIntensity: { value: 1 },
       resolution: { value: new THREE.Vector2(1, 1) },
       viewMatrixInverse: { value: new THREE.Matrix4() },
       // projection * view — for NDC exit projection
@@ -42,6 +66,7 @@ export function createPrismMaterial({
       attenuationColor: { value: new THREE.Color(p.attenuationColor) },
       attenuationDistance: { value: p.attenuationDistance },
       translucency: { value: 0.08 },
+      exposure: { value: PRISM_EXPOSURE },
       map: { value: map },
       roughnessMap: { value: roughnessMap },
       normalMap: { value: normalMap },
@@ -74,10 +99,14 @@ export function createPrismMaterial({
     fragmentShader: /* glsl */ `
       precision highp float;
 
+      #include <common>
+      #include <cube_uv_reflection_fragment>
+
       uniform sampler2D tRefraction;
       uniform sampler2D tBackfaceNormal;
       uniform sampler2D envMap;
       uniform float envMapIntensity;
+      uniform float environmentIntensity;
       uniform vec2 resolution;
       uniform mat4 viewProjectionMatrix;
       uniform float ior;
@@ -87,6 +116,7 @@ export function createPrismMaterial({
       uniform vec3 attenuationColor;
       uniform float attenuationDistance;
       uniform float translucency;
+      uniform float exposure;
       uniform sampler2D map;
       uniform sampler2D roughnessMap;
       uniform sampler2D normalMap;
@@ -105,12 +135,11 @@ export function createPrismMaterial({
       varying vec2 vUv;
       varying vec4 vClip;
 
-      vec2 equirectUv(vec3 dir) {
-        vec3 d = normalize(dir);
-        float u = atan(d.z, d.x) * 0.15915494309189535 + 0.5;
-        float v = asin(clamp(d.y, -1.0, 1.0)) * 0.3183098861837907 + 0.5;
-        return vec2(u, v);
-      }
+      // How far past the exit point the plate is re-sampled along T2, as a fraction
+      // of the interior path length. Art-directed: large enough that the backface
+      // exit normal visibly moves the read, small enough not to detach the sample
+      // from the geometry behind the prism.
+      #define PLATE_EXIT_STEP 0.22
 
       // Cheap hash for roughness jitter (stable per-fragment, not temporal).
       float hash12(vec2 p) {
@@ -131,10 +160,14 @@ export function createPrismMaterial({
       }
 
       vec3 sampleEnv(vec3 dir, float rough) {
-        if (hasEnvMap < 0.5) return vec3(0.02, 0.03, 0.05);
-        // Bias ≈ mip: frosted glass samples a blurrier equirect lobe.
-        float bias = rough * rough * 8.0;
-        return texture2D(envMap, equirectUv(dir), bias).rgb * envMapIntensity;
+        #ifdef ENVMAP_TYPE_CUBE_UV
+          if (hasEnvMap < 0.5) return vec3(0.02, 0.03, 0.05);
+          // PMREM: roughness picks a pre-convolved mip. No seam, no aliasing on
+          // the 4K equirect, and roughness actually reaches the specular lobe.
+          return textureCubeUV(envMap, dir, rough).rgb * envMapIntensity * environmentIntensity;
+        #else
+          return vec3(0.02, 0.03, 0.05);
+        #endif
       }
 
       vec3 sampleRefraction(vec2 uv, float rough) {
@@ -148,22 +181,24 @@ export function createPrismMaterial({
         return normalize(T);
       }
 
-      // Project a world-space point to screen UV via the frame's viewProjection.
-      vec2 projectToScreenUV(vec3 worldPos) {
-        vec4 clip = viewProjectionMatrix * vec4(worldPos, 1.0);
-        vec2 ndc = clip.xy / max(clip.w, 1e-4);
-        return clamp(ndc * 0.5 + 0.5, vec2(0.001), vec2(0.999));
-      }
-
       /**
        * Plate UV: march to exit along T1, then sample a short step beyond along T2.
        * T1 alone already smears by entry IOR; T2 makes the backface exit normal
        * change which texel is read (otherwise the RT path ignores exitN).
+       *
+       * Returns xy = clamped screen UV, z = how far outside the captured frame the
+       * sample landed (0 = inside, 1 = fully outside). The plate only holds what the
+       * camera saw, so off-frame rays must fall back to the environment instead of
+       * smearing the border texel.
        */
-      vec2 plateScreenUV(vec3 entryPos, vec3 T1, vec3 T2, float path) {
+      vec3 plateScreenUV(vec3 entryPos, vec3 T1, vec3 T2, float path) {
         vec3 exitPos = entryPos + T1 * path;
-        vec3 beyond = exitPos + T2 * (path * 0.22);
-        return projectToScreenUV(beyond);
+        vec3 beyond = exitPos + T2 * (path * PLATE_EXIT_STEP);
+        vec4 clip = viewProjectionMatrix * vec4(beyond, 1.0);
+        vec2 uv = (clip.xy / max(abs(clip.w), 1e-4)) * 0.5 + 0.5;
+        vec2 outside = max(vec2(0.0) - uv, uv - vec2(1.0));
+        float off = clamp(max(max(outside.x, outside.y) * 6.0, step(clip.w, 0.0)), 0.0, 1.0);
+        return vec3(clamp(uv, vec2(0.001), vec2(0.999)), off);
       }
 
       void main() {
@@ -231,21 +266,32 @@ export function createPrismMaterial({
         vec3 transmitted;
         if (hasRefraction > 0.5) {
           // T1 path + T2 beyond-exit: backface IOR split moves the plate read.
-          float r = sampleRefraction(plateScreenUV(vWorldPos, T1R, T2R, path), rough).r;
-          float g = sampleRefraction(plateScreenUV(vWorldPos, T1G, T2G, path), rough).g;
-          float b = sampleRefraction(plateScreenUV(vWorldPos, T1B, T2B, path), rough).b;
-          transmitted = vec3(r, g, b);
+          vec3 uvR = plateScreenUV(vWorldPos, T1R, T2R, path);
+          vec3 uvG = plateScreenUV(vWorldPos, T1G, T2G, path);
+          vec3 uvB = plateScreenUV(vWorldPos, T1B, T2B, path);
+          transmitted = vec3(
+            sampleRefraction(uvR.xy, rough).r,
+            sampleRefraction(uvG.xy, rough).g,
+            sampleRefraction(uvB.xy, rough).b
+          );
+
+          // Only rays that exit the captured frame read the environment. The old
+          // code mixed in 22% raw HDR unconditionally, ignoring plate validity.
+          float off = max(uvR.z, max(uvG.z, uvB.z));
+          if (off > 0.001) {
+            vec3 envT = vec3(
+              sampleEnv(T2R, rough).r,
+              sampleEnv(T2G, rough).g,
+              sampleEnv(T2B, rough).b
+            );
+            transmitted = mix(transmitted, envT, off);
+          }
         } else {
           transmitted = vec3(
             sampleEnv(T2R, rough).r,
             sampleEnv(T2G, rough).g,
             sampleEnv(T2B, rough).b
           );
-        }
-
-        if (hasEnvMap > 0.5) {
-          vec3 envT = vec3(sampleEnv(T2R, rough).r, sampleEnv(T2G, rough).g, sampleEnv(T2B, rough).b);
-          transmitted = mix(transmitted, envT, 0.22 + translucency * 0.15);
         }
 
         vec3 reflected = sampleEnv(reflect(I, N), rough);
@@ -263,9 +309,8 @@ export function createPrismMaterial({
         lit = mix(lit, mix(lit, attenuationColor, 0.35), translucency * 0.5);
 
         // Linear radiance scale only — NOT tone mapping, NOT clamp.
-        // Keeps typical crystal body in a sensible range while highlights stay >1
-        // so bloom/glare extract (OutputPass owns ACES).
-        lit *= 0.28;
+        // Highlights stay >1 so bloom can extract them (OutputPass owns ACES).
+        lit *= exposure;
 
         gl_FragColor = vec4(lit, 1.0);
       }
@@ -286,10 +331,33 @@ export function createPrismMaterial({
     material.uniforms.tBackfaceNormal.value = texture
     material.uniforms.hasBackface.value = texture ? 1 : 0
   }
+  /**
+   * Takes the PMREM produced by `buildPmremFromEquirect` (i.e. `scene.environment`).
+   * The CubeUV defines mirror three's own `generateCubeUVSize`, so `textureCubeUV`
+   * decodes the packed atlas exactly as MeshStandardMaterial does.
+   */
   material.userData.setEnvMap = (env) => {
-    const equirect = env?.userData?.equirect || (env?.isDataTexture ? env : null) || null
-    material.uniforms.envMap.value = equirect
-    material.uniforms.hasEnvMap.value = equirect ? 1 : 0
+    const pmrem = env?.mapping === THREE.CubeUVReflectionMapping ? env : null
+    material.uniforms.envMap.value = pmrem
+    material.uniforms.hasEnvMap.value = pmrem ? 1 : 0
+    if (!pmrem) return
+
+    const height = pmrem.image?.height || 256
+    const maxMip = Math.log2(height) - 2
+    const next = {
+      ENVMAP_TYPE_CUBE_UV: '',
+      CUBEUV_TEXEL_WIDTH: 1 / (3 * Math.max(2 ** maxMip, 7 * 16)),
+      CUBEUV_TEXEL_HEIGHT: 1 / height,
+      CUBEUV_MAX_MIP: `${maxMip}.0`,
+    }
+    const changed = Object.keys(next).some((key) => material.defines[key] !== next[key])
+    if (changed) {
+      material.defines = next
+      material.needsUpdate = true
+    }
+  }
+  material.userData.setEnvironmentIntensity = (value) => {
+    material.uniforms.environmentIntensity.value = value ?? 1
   }
   material.userData.setResolution = (w, h) => {
     material.uniforms.resolution.value.set(w, h)
@@ -310,6 +378,13 @@ export function applyPrismMaterialParams(material, params = {}) {
   if (params.roughness != null) u.roughness.value = params.roughness
   if (params.translucency != null) u.translucency.value = params.translucency
   if (params.envMapIntensity != null) u.envMapIntensity.value = params.envMapIntensity
+  if (params.speckle != null) {
+    // Mirrors applyPhysicalParams: speckle drives normal-map strength. Without
+    // this the custom engine ignored the control entirely and its only outlet was
+    // the demo's additive `surface-details` layer, which is decoration, not glass.
+    const normalStrength = 0.055 + params.speckle * 0.45
+    u.normalScale.value.set(normalStrength, normalStrength)
+  }
 
   if (params.presetKey && MATERIAL_PRESETS[params.presetKey]) {
     const p = MATERIAL_PRESETS[params.presetKey]

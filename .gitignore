@@ -1,4 +1,6 @@
 node_modules
 dist
+dist-lib-check
 .DS_Store
 *.local
+.claude

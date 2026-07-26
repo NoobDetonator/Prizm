@@ -5,6 +5,11 @@ These numbers are **not** a proxy for real GPU fill-rate, bandwidth, or fullscre
 
 Viewport **1920×1080**, same method as `perf-before.md`.
 
+**Engine coverage: `physical` only.** The `custom` engine pays an extra half-res
+capture of the whole scene plus a backface pre-pass every frame, and none of that
+is in the table below. Re-run `scripts/measure-perf.mjs` with the engine switched
+before quoting these numbers for `custom`.
+
 | look | DPR | ms/frame | fps* | draw calls | triangles | samples |
 | --- | --- | --- | --- | --- | --- | --- |
 | `studio` | 1 | 28.533 | 35.05 | 51 | 45059 | 6 |
